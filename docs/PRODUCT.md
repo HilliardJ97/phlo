@@ -76,7 +76,10 @@ The full design is in `EXPRESSION_SYSTEM.md`. The decisions:
 
 | Idea | Decision |
 |---|---|
-| Every shape you could need | **Eight families, one word each:** Text, Marks, Compare, Flow, Chart, Map, Make, Media. Phlo picks the variant (pie or line, cycle or timeline); you can say a different one. |
+| Every shape you could need | **Eight families, one word each:** Text, Marks, Compare, Flow, Numbers, Map, Make, Media. Over 40 variants underneath; Phlo picks one (pie or line, cycle or timeline) and you can say a different one. Maximal depth, minimal surface. |
+| New: estimates | **Spoken math becomes a live calculation** (`10M × 5% × $40 = $20M`). Change one input, the total updates. Built for sizing questions. P0 for the framer launch. |
+| New: your voice, kept | **Hear any line as you said it.** Local only. The strongest proof of the Scribe promise. |
+| New: pins | **Point at anything visual** (screenshot, chart, wireframe, Figma) and your words become a numbered note on that spot. |
 | Post-its | **Cut.** Marks (Question, Idea, Decision, Note, Risk, Key point) and margin cards already do that job. A post-it would be a third way to say the same thing. |
 | Green questions, yellow ideas | **Shape, not color.** Twenty ink marks built from the brand's four parts. Color stays earned for themes. |
 | Highlight what's important | **Key point:** "that's really important" marks the line, and key points become the Published summary. |

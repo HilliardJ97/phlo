@@ -136,7 +136,21 @@ render: color to ink 280 ms, then glide 420 ms (FLIP), reduced motion respected
 
 **The problem.** At minute 45 you say "like the newsletter thing I mentioned at the start" or "not forty, sixty" about a number from minute 3. Phlo has to find it. The naive fixes both fail: sending the whole transcript makes every settle slower and costlier as the session grows, and a single growing chat thread does the same thing in a less visible way.
 
-**Phlo's advantage: the page *is* the memory.** Every settle compresses speech into a titled outline with ids. That outline is a better summary than any model-written one, because you can see it and fix it. Muse (now Allume) keeps history with a local-first CRDT sync engine; Phlo's journal and trails already keep every version of every word. What's missing is how the *model* sees a long session.
+**Phlo's advantage: the page *is* the memory.** Every settle compresses speech into a titled outline with ids. That outline is a better summary than any model-written one, because you can see it and fix it. Phlo's journal and trails already keep every version of every word. What's missing is how the *model* sees a long session.
+
+**What we take from Meta's Muse** (Meta's personal agent, September 2026; from press coverage, not Meta's own docs):
+
+| Muse does | Phlo's version |
+|---|---|
+| A separate memory agent works beside the action agent, surfacing context "when it matters" (Meta's paper on "behavioral state decay") | A **Memory keeper** in the cold lane watches the transcript and pushes what's relevant into the next settle, instead of waiting for "earlier" or "I said" |
+| Users can inspect and edit Memory files | **What Phlo remembers** in the sidebar: this draft's aim, standing instructions, people and numbers. Edit or delete any of them. |
+| Contact pages: facts, history and open threads per person | **Ledger entries** per person, product and number, linking every place they appear. They become nodes in Map view. |
+| An append-only event log rebuilds work after context compression | Already true: transcript and journal are the source of truth. Memory is derived and can be rebuilt by a better model at any time. |
+| Goals tracked across conversations | The draft's **aim**, inferred from the first minutes ("designing a morning chief of staff") and always sent |
+
+**Standing instructions** fix behavioral decay for Phlo. Things you said once that should hold all session ("keep it to three pillars", "call them members, not users", Scribe on) are pinned and sent with every request. The model never "forgets" them at minute 50.
+
+**Contradictions.** When the Memory keeper sees you contradict yourself ("forty percent" at minute 5, "sixty" at minute 40, different sections), it offers one margin Ask: `PHLO ASKS · Earlier you said 40%. Update it?` Partner only.
 
 **Four tiers, assembled fresh for every request:**
 

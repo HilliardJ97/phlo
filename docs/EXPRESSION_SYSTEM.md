@@ -12,14 +12,18 @@ So the system has **eight families**. Each is one word in the Add menu and one w
 
 | Family | Say | Phlo picks between | How it picks |
 |---|---|---|---|
-| **Text** | "heading", "list", "quote" | Heading, subheading, text, bullets, numbered, quote | Your cues: "first… second…" makes a numbered list |
-| **Marks** | "that's a question", "key point" | Question, Idea, Decision, Note, Risk, Key point | The words: "should we…?" is a Question; "we decided" is a Decision; "that's really important" is a Key point |
-| **Compare** | "compare these", "pillars" | Table, columns, pillars, pros and cons, 2×2 | Items with the same attributes become a table; 2–4 named themes become pillars; "on one hand" becomes pros and cons; two axes become a 2×2 |
-| **Flow** | "flowchart", "steps" | Steps (1·2·3), linear flow, branching flow, cycle, timeline, funnel | "then" is linear; "if… otherwise" branches; "and back to the start" is a cycle; dates or quarters are a timeline; shrinking counts are a funnel |
-| **Chart** | "chart that" | Bar, line, area, pie, histogram, scatter, stacked bar | The data: ordered time goes on a line; categories go on bars; parts of a whole (≤ 5, adding to 100%) make a pie; many raw values make a histogram; two measures per item make a scatter |
-| **Map** | "connect this to pricing", "map it" | Connect (a link between two blocks), tree, mind map | One link draws a Connect; a parent with children makes a tree; ideas around a center make a mind map |
+| **Text** | "heading", "list", "checklist" | Heading, subheading, text, bullets, numbered, checklist, definitions, quote, code | Your cues: "first… second…" makes a numbered list; "X means Y" makes a definition |
+| **Marks** | "that's a question", "key point" | Question, Idea, Decision, Note, Risk, Assumption, Key point | The words: "should we…?" is a Question; "we decided" is a Decision; "I'm assuming" is an Assumption; "that's really important" is a Key point |
+| **Compare** | "compare these", "pillars", "rank them" | Table, cards, pillars, pros and cons, 2×2, Venn, ranking | Items with the same attributes make a table; 2–4 named themes make pillars; "on one hand" makes pros and cons; two axes make a 2×2; overlap makes a Venn; "rank" or "prioritize" makes a scored ranking |
+| **Flow** | "flowchart", "steps" | Steps (1·2·3), linear, branching, cycle, timeline, schedule, journey, funnel | "then" is linear; "if… otherwise" branches; "back to the start" is a cycle; dates make a timeline; clock times make a schedule; stages with feelings make a journey; shrinking counts make a funnel |
+| **Numbers** | "chart that", "estimate it" | Big number, estimate, bar, line, area, pie, histogram, scatter, stacked | One number that matters becomes a big number; spoken arithmetic becomes a live estimate; a series becomes a chart. Time goes on a line, categories on bars, parts of a whole (≤ 5) on a pie, raw values in a histogram |
+| **Map** | "connect this to pricing", "map it", "diagram it" | Connect, tree, mind map, diagram (boxes and arrows) | One link draws a Connect; a parent with children makes a tree; ideas around a center make a mind map; parts that talk to each other make a diagram |
 | **Make** | "wireframe this", "prototype it" | Wireframe, clickable prototype | Wireframe first; prototype once there are screens to click between |
 | **Media** | "find a photo of…", paste a link | Photo, video, Figma, PDF, Markdown or HTML preview, image you upload | The link or file type |
+
+**Chart became Numbers.** Charts are one way to show a number, not the job. The job is "make the number land", and two of the most-used slide patterns aren't charts: the **big number** (`73%` with one line under it) and the **estimate**.
+
+**The estimate is the sleeper feature.** Say "ten million families, five percent make a book a year, forty dollars each". Phlo writes it as a small live calculation, `10M × 5% × $40 = $20M`, with each input labeled by your words. Say "make it three percent" and the total updates, with the old value in its trail. Every product sense and case interview has this moment, and today it happens on a napkin.
 
 **Switching is instant and lossless:** "as a pie", "make it a cycle", "turn that into pillars". The underlying content (items, values, sources) stays; only the shape changes. That's already how `turnIntoOps` works.
 
@@ -45,6 +49,29 @@ Today's callouts are deliberately monochrome: a rule line for a Question, a soli
 - **This is where generated images went.** For a page about ideas, a precise mark says more than an illustration. Making images moves to Make and Publish covers, later.
 
 **Key point (highlight).** Say "that's really important" or "key point". The line gets the Key mark in the gutter and moves up one step in ink weight (Geist 500, the only place body text is heavier). Key points collect at the top of a Published piece as its summary. Highlighting does a job instead of just painting.
+
+## 2b. Point at anything: pins
+
+The arrows you wanted, generalized. Pins aren't only for wireframes: **any visual can take a pin.** That includes a screenshot in References, a chart bar, a Figma frame, a photo or a flow step. Say "this part" while hovering, or click to drop one. Your words become the pin's note, numbered, in the margin-card style. One annotation layer for everything visual, so there's nothing new to learn.
+
+## 2c. Your voice, kept
+
+Every settled line remembers the moment you said it. Hover the line, press the `Said` mark, and hear yourself say it. Speech is stored on your computer only, and you can turn it off.
+
+Why it matters: it's the strongest proof of the Scribe promise ("every line traces back to what you said"), it makes a page re-listenable weeks later, and no text-first tool can copy it. It's cheap to build because the transcript already has time codes.
+
+## 2d. What we say no to
+
+Saying no is part of the taste. These are obvious and still wrong for Phlo:
+
+| Asked-for shape | Why not |
+|---|---|
+| Post-its | Marks and margin cards already do it |
+| Kanban boards | A task manager inside a thinking tool. The Next list goes to Todoist or Linear instead (later). |
+| Free drawing and whiteboards | A second product. Pins and Connect cover pointing; Flow and Map cover shapes. |
+| Fonts, colors and text sizes | The page has one voice. Expression comes from structure, not styling. |
+| Emoji and stickers | Marks do the job, in the brand. |
+| 3D, gantt charts, org charts | Rare in thinking. Add one only when real sessions ask for it twice. |
 
 ## 3. Phlo in the margin: one system for every chime-in
 
@@ -73,6 +100,8 @@ Every time Phlo has something for you (a question, a suggestion, research, a tan
 - **Talk:** "the brief first", "yes, make it a cycle", "use the second one". Phlo matches your words to the card next to where you are.
 - **Click** a choice, or the card to open it.
 - **Ignore it.** Keep talking. An Ask fades when you resume; the card was an offer, not a gate. If the Ask was about ambiguity, Phlo goes with its best guess and puts a faint tab on that line so you can see and undo it.
+
+**Phlo speaks only at pauses.** A card never arrives mid-sentence; it waits for a breath of about 1.5 s. In Partner, unprompted cards (Ask, Suggest) are limited to **one every ~3 minutes**. Anything you asked for (Found, Working) is unlimited. A partner who interrupts every thought is worse than none.
 
 **Stacking (the part that keeps it calm):**
 - **One card per section.** A newer card replaces the older one, which drops into the sidebar.
