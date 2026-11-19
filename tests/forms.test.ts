@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DocEngine } from "../src/engine/engine";
 import { emptyDraft, type Block } from "../src/engine/model";
-import { listRun, listToTable, splitItem, tableToItems, turnIntoOps } from "../src/engine/forms";
+import { listRun, listToTable, splitItem, suggestForm, tableToItems, turnIntoOps } from "../src/engine/forms";
 import { buildRequest, compilePlan, spanEdit } from "../src/engine/settle";
 import { localPlan } from "../src/engine/local";
 import { withCorrectionTarget } from "../src/engine/settle";
@@ -42,7 +42,7 @@ describe("Turn into", () => {
     const t = turnIntoOps(e.state.blocks, "c", "table");
     expect(e.commit({ id: "t", actor: "user", label: t.label, ops: t.ops }).ok).toBe(true);
     const table = e.state.blocks.find((x) => x.kind === "table")!;
-    expect(table.data!.columns[0]).toBe("Item");
+    expect(table.data!.columns.slice(0, 2)).toEqual(["Item", "Price"]);
     expect(table.data!.rows).toEqual([
       ["Notion", "$10", "cloud only", ""],
       ["Granola", "$14", "meetings", "desktop"],
@@ -96,6 +96,15 @@ describe("Turn into", () => {
     expect(e.commit({ id: "x", actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
     expect(e.block("fl")!.steps).toEqual(["Upload", "Phlo picks the best forty", "Order"]);
     expect(e.block("fl")!.trail).toEqual(["Upload → Phlo picks the best sixty → Order"]);
+  });
+
+  it("suggests a form only when the words already have its shape", () => {
+    const blocks = eng().state.blocks;
+    expect(suggestForm(blocks, new Set())).toMatchObject({ id: "a", kind: "table" });
+    expect(suggestForm(blocks, new Set(["a"]))).toBeNull();
+    const steps = [b("1", "numbered", "Upload"), b("2", "numbered", "Pick"), b("3", "numbered", "Order")];
+    expect(suggestForm(steps, new Set())).toMatchObject({ kind: "flow" });
+    expect(suggestForm([b("x", "bullet", "just a thought"), b("y", "bullet", "another"), b("z", "bullet", "third")], new Set())).toBeNull();
   });
 
   it("text forms are a kind change only", () => {

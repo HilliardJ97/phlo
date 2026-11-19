@@ -8,7 +8,7 @@ import { emptyDraft, sections, substantiveSectionCount, type Block, type Draft, 
 import { buildRequest, compilePlan, headingOf, type SettleResponse } from "../engine/settle";
 import { host, HostError, type HostSettings } from "./bridge";
 import { Editor, inPage } from "./editor/view";
-import { FORM_OPTIONS, listRun, turnIntoOps } from "../engine/forms";
+import { FORM_OPTIONS, listRun, suggestForm, turnIntoOps } from "../engine/forms";
 import { BrowserSTT, browserSttAvailable, UtteranceSTT, type Stt } from "./voice/stt";
 
 // ============================================================================ helpers
@@ -289,11 +289,39 @@ function repaintSpotlight() {
   placeLive();
 }
 
+const dismissedSuggestions = new Set<string>();
+
 function renderTabs() {
   const box = $("tabs");
   box.querySelectorAll(".tab-card").forEach((n) => n.remove());
-  const tangents = engine.state.role === "partner" ? engine.state.blocks.filter((b) => b.tab === "tangent" && !b.wet && b.text.trim()) : [];
-  box.classList.toggle("has", tangents.length > 0);
+  const partner = engine.state.role === "partner";
+  const tangents = partner ? engine.state.blocks.filter((b) => b.tab === "tangent" && !b.wet && b.text.trim()) : [];
+  // Phlo suggests a form when the words already have its shape (Partner only, never mid-talk).
+  const sug = partner && !talking ? suggestForm(engine.state.blocks.filter(inPage), dismissedSuggestions) : null;
+  box.classList.toggle("has", tangents.length > 0 || !!sug);
+  if (sug) {
+    const card = h("div", { class: "tab-card suggest" });
+    const actions = h("div", { class: "actions" });
+    const yes = h("button", { class: "label linkish" }, sug.action);
+    const no = h("button", { class: "label" }, "Not now");
+    yes.onclick = () => {
+      const conv = turnIntoOps(engine.state.blocks, sug.id, sug.kind);
+      const txId = newId("tx");
+      if (engine.commit({ id: txId, actor: "user", label: conv.label, ops: conv.ops }).ok) {
+        render();
+        toast(conv.label, { label: "Undo", run: () => void (engine.undo(txId), render()) });
+      }
+    };
+    no.onclick = () => {
+      dismissedSuggestions.add(sug.id);
+      renderTabs();
+    };
+    actions.append(yes, no);
+    card.append(h("div", { class: "label" }, "Phlo suggests"), h("p", {}, sug.text), actions);
+    card.addEventListener("mouseenter", () => sug.ids.forEach((id) => editor.elementOf(id)?.classList.add("hint-target")));
+    card.addEventListener("mouseleave", () => sug.ids.forEach((id) => editor.elementOf(id)?.classList.remove("hint-target")));
+    box.appendChild(card);
+  }
   for (const t of tangents.slice(-5)) {
     const card = h("button", { class: "tab-card", title: "Open it here" });
     card.append(h("div", { class: "label" }, "Tangent · later"), h("p", {}, t.text));

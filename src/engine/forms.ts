@@ -60,6 +60,14 @@ export function listToTable(items: Block[]): TableData {
   const cells = items.map((b) => splitItem(b.text));
   const width = Math.max(...cells.map((c) => c.length));
   const columns = width === 1 ? ["Item"] : width === 2 ? ["Item", "Detail"] : ["Item", ...Array.from({ length: width - 1 }, (_, k) => `Detail ${k + 1}`)];
+  // Name a column when its cells make the meaning obvious; otherwise keep the neutral label.
+  for (let c = 1; c < width; c++) {
+    const vals = cells.map((r) => (r[c] ?? "").toLowerCase()).filter(Boolean);
+    if (!vals.length) continue;
+    const share = (re: RegExp) => vals.filter((v) => re.test(v)).length / vals.length;
+    if (share(/\$|€|£|dollars?|\bfree\b|\/mo|per (?:month|seat|year)|pricing|\bcost/) >= 0.66) columns[c] = "Price";
+    else if (share(/^\d[\d.,]*\s*%$|^\d[\d.,]*\s*(?:k|m|users?|people)?$/) >= 0.66) columns[c] = "Value";
+  }
   const rows = cells.map((c) => [...c, ...Array(width - c.length).fill("")]);
   return { columns, rows };
 }
@@ -157,4 +165,37 @@ export function turnIntoOps(blocks: Block[], id: string, kind: BlockKind): { ops
     focus: id,
     label: "",
   };
+}
+
+export interface FormSuggestion {
+  /** First block of the run; also the dismissal key. */
+  id: string;
+  /** Every block the suggestion would change. */
+  ids: string[];
+  kind: "flow" | "table";
+  text: string;
+  action: string;
+}
+
+/**
+ * Partner notices when words already have a shape: 3+ ordered steps read like a
+ * flow; 3+ list items that each carry attributes ("Notion: $10, cloud") read like
+ * a table. Pure and deterministic: no model call, no surprise.
+ */
+export function suggestForm(blocks: Block[], dismissed: Set<string>): FormSuggestion | null {
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.wet || dismissed.has(b.id) || (b.kind !== "numbered" && b.kind !== "bullet")) continue;
+    if (i > 0 && blocks[i - 1].kind === b.kind && !blocks[i - 1].wet) continue; // only at the start of a run
+    const run = listRun(blocks, b.id).filter((x) => !x.wet && x.text.trim());
+    if (run.length < 3) continue;
+    if (b.kind === "numbered") {
+      return { id: b.id, ids: run.map((x) => x.id), kind: "flow", text: `These ${run.length} steps read like a flow.`, action: "Make a flow" };
+    }
+    const shaped = run.filter((x) => splitItem(x.text).length >= 2).length;
+    if (shaped >= Math.max(2, Math.ceil(run.length * 0.66))) {
+      return { id: b.id, ids: run.map((x) => x.id), kind: "table", text: `These ${run.length} items compare well side by side.`, action: "Make a table" };
+    }
+  }
+  return null;
 }

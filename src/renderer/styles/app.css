@@ -415,3 +415,9 @@ dialog.settings { max-height: calc(100vh - 48px); overflow-y: auto; }
 .blk[data-kind="flow"]:hover .tbl-tools, .blk[data-kind="flow"]:focus-within .tbl-tools { opacity: 1; }
 body.room .flow-text { font: var(--room-body); }
 body.room .flow-step { max-width: 260px; }
+
+/* Phlo suggests: a quiet card; hovering it marks the lines it would change */
+.tab-card.suggest::before { background: var(--ink-muted); }
+.tab-card.suggest .actions { display: flex; gap: var(--space-3); margin-top: 10px; }
+.tab-card.suggest .linkish { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.blk.hint-target { background: color-mix(in srgb, var(--tab) 14%, transparent); border-radius: var(--radius-sm); }
