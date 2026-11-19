@@ -8,6 +8,7 @@ import { emptyDraft, sections, substantiveSectionCount, type Block, type Draft, 
 import { buildRequest, compilePlan, headingOf, type SettleResponse } from "../engine/settle";
 import { host, HostError, type HostSettings } from "./bridge";
 import { Editor, inPage } from "./editor/view";
+import { FORM_OPTIONS, listRun, turnIntoOps } from "../engine/forms";
 import { BrowserSTT, browserSttAvailable, UtteranceSTT, type Stt } from "./voice/stt";
 
 // ============================================================================ helpers
@@ -104,6 +105,7 @@ app.innerHTML = `
       <div id="segments"></div>
     </aside>
     <div class="toast" id="toast" role="status"></div>
+    <div class="forms-menu" id="forms-menu" role="listbox" aria-label="Forms"></div>
   </main>
   <dialog class="settings" id="settings">
     <form method="dialog">
@@ -169,6 +171,8 @@ const editor = new Editor(docEl, () => engine, {
   onPaste: (e) => handlePaste(e),
   onUndo: () => undo(),
   onRedo: () => void engine.redo(),
+  onSlash: (id, query) => (id ? openForms(id, "add", query) : formsMode === "add" && closeForms()),
+  onMenuKey: (e) => formsKey(e),
 });
 
 function sameWetRun(a: string, b: string): boolean {
@@ -513,7 +517,8 @@ class Settler {
     if (caret && caret.wet && !caret.text.trim() && lastPlaced && lastPlaced !== caret.id && !req.wet.some((w) => w.id === caret.id)) {
       ops.push({ t: "move", id: caret.id, after: lastPlaced });
     }
-    const out = engine.commit({ id: newId("tx"), actor: "phlo", label: "Settle", ops });
+    const txId = newId("tx");
+    const out = engine.commit({ id: txId, actor: "phlo", label: compiled.structural.length ? compiled.structural.join(" · ") : "Settle", ops });
     if (!out.ok) {
       if (++this.conflicts < 4) this.again = true;
       return;
@@ -525,6 +530,17 @@ class Settler {
     if (placed && talking) currentHeading = headingOf(engine.state.blocks, placed) ?? currentHeading;
     if (compiled.question && engine.state.role === "partner" && talking) showAsk(compiled.question);
     render(compiled.settledIds);
+    // You asked for a structural change: say exactly what changed, with one-tap undo.
+    if (compiled.structural.length) {
+      toast(compiled.structural.join(" · "), {
+        label: "Undo",
+        run: () => {
+          const r = engine.undo(txId);
+          if (r && !r.ok) toast("That changed since. Nothing undone.");
+          else render();
+        },
+      }, 6000);
+    }
     if (caret && document.activeElement === docEl && engine.block(caret.id)) editor.setCaret(caret.id, 0);
     if (hintEl.isConnected && !engine.state.blocks.some((b) => b.wet && b.origin === "typed" && b.text.trim())) hintEl.remove();
     $("stats-meta").textContent = `${res.route === "model" ? "Claude" : res.route === "fallback" ? "Local fallback" : "Local"} · ${(res.latencyMs / 1000).toFixed(1)}s`.toUpperCase();
@@ -844,6 +860,112 @@ docEl.addEventListener("input", () => {
     editor.elementOf(c.id)?.after(hintEl);
     store.set("phlo.hint.typing", "1");
   }
+});
+
+// ============================================================================ forms: Add (/) and Turn into (right-click)
+
+const formsEl = $<HTMLDivElement>("forms-menu");
+let formsMode: "add" | "turn" | null = null;
+let formsTarget: string | null = null;
+let formsIndex = 0;
+let formsShown = FORM_OPTIONS;
+
+function openForms(id: string, mode: "add" | "turn", query = "") {
+  const b = engine.block(id);
+  if (!b) return;
+  formsMode = mode;
+  formsTarget = id;
+  const q = query.toLowerCase();
+  formsShown = FORM_OPTIONS.filter((o) => o.kind !== b.kind || mode === "add").filter((o) => !q || o.label.toLowerCase().startsWith(q) || o.kind.startsWith(q));
+  // A table from a list only makes sense when there's a list (or an empty line to start one).
+  if (mode === "turn" && b.kind !== "table" && listRun(engine.state.blocks, id).length < 2 && b.text.trim()) formsShown = formsShown.filter((o) => o.kind !== "table");
+  if (!formsShown.length) return closeForms();
+  formsIndex = Math.min(formsIndex, formsShown.length - 1);
+  formsEl.innerHTML = "";
+  formsEl.appendChild(h("div", { class: "label" }, mode === "add" ? "Add" : "Turn into"));
+  formsShown.forEach((o, i) => {
+    const row = h("button", { class: "form-row", role: "option", "aria-selected": String(i === formsIndex) });
+    row.append(h("span", { class: "fname" }, o.label), h("span", { class: "meta" }, o.hint));
+    row.addEventListener("mousedown", (e) => e.preventDefault());
+    row.onclick = () => applyForm(o.kind);
+    formsEl.appendChild(row);
+  });
+  const el = editor.elementOf(id);
+  const main = $("main").getBoundingClientRect();
+  const r = el?.getBoundingClientRect();
+  if (r) {
+    formsEl.style.left = `${r.left - main.left}px`;
+    const below = r.bottom - main.top + 6;
+    formsEl.style.top = `${below + 320 > main.height ? Math.max(8, r.top - main.top - 330) : below}px`;
+  }
+  formsEl.classList.add("open");
+}
+
+function closeForms() {
+  formsMode = null;
+  formsTarget = null;
+  formsIndex = 0;
+  formsEl.classList.remove("open");
+}
+
+function applyForm(kind: (typeof FORM_OPTIONS)[number]["kind"]) {
+  const id = formsTarget;
+  const mode = formsMode;
+  closeForms();
+  if (!id) return;
+  let b = engine.block(id);
+  if (!b) return;
+  if (mode === "add" && b.text.startsWith("/")) {
+    // The "/query" was a command, not words.
+    engine.commit({ id: newId("tx"), actor: "user", label: "Add", ops: [{ t: "update", id, patch: { text: "" } }] });
+    b = engine.block(id)!;
+  }
+  const conv = turnIntoOps(engine.state.blocks, id, kind);
+  if (!conv.ops.length) return;
+  const txId = newId("tx");
+  const out = engine.commit({ id: txId, actor: "user", label: conv.label || "Turn into", ops: conv.ops });
+  if (!out.ok) return toast("That changed since. Try again.");
+  render();
+  if (conv.focus) {
+    const fb = engine.block(conv.focus);
+    if (fb?.kind === "table") {
+      requestAnimationFrame(() => (editor.elementOf(conv.focus!)?.querySelector("td,th") as HTMLElement | null)?.focus());
+    } else if (fb) editor.setCaret(fb.id, fb.text.length);
+  }
+  if (conv.label) toast(conv.label, { label: "Undo", run: () => void (engine.undo(txId), render()) });
+}
+
+function formsKey(e: KeyboardEvent): boolean {
+  if (!formsMode) return false;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    formsIndex = (formsIndex + (e.key === "ArrowDown" ? 1 : -1) + formsShown.length) % formsShown.length;
+    if (formsTarget) openForms(formsTarget, formsMode, formsMode === "add" ? (engine.block(formsTarget)?.text.slice(1) ?? "") : "");
+    return true;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const o = formsShown[formsIndex];
+    if (o) applyForm(o.kind);
+    return true;
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeForms();
+    return true;
+  }
+  return false;
+}
+
+docEl.addEventListener("contextmenu", (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>(".blk");
+  if (!el?.dataset.id || (e.target as HTMLElement).closest("td,th")) return;
+  e.preventDefault();
+  formsIndex = 0;
+  openForms(el.dataset.id, "turn");
+});
+document.addEventListener("mousedown", (e) => {
+  if (formsMode && !formsEl.contains(e.target as Node)) closeForms();
 });
 
 // ============================================================================ undo

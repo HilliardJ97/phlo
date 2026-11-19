@@ -8,7 +8,33 @@
  * (or turned into a suggestion) instead of overwriting newer work.
  */
 
-export type BlockKind = "heading" | "paragraph" | "bullet" | "question";
+/**
+ * Forms a block can take. Text forms share one shape (text + kind); a table
+ * keeps its meaning in `data`. "Turn into" changes the kind, never the words.
+ */
+export type BlockKind =
+  | "heading"
+  | "paragraph"
+  | "bullet"
+  | "numbered"
+  | "question"
+  | "decision"
+  | "idea"
+  | "callout"
+  | "table";
+
+/** Thinking forms carry a mono label; they're how Phlo models thinking, not formatting. */
+export const FORM_LABEL: Partial<Record<BlockKind, string>> = {
+  question: "Open question",
+  decision: "Decision",
+  idea: "Idea",
+  callout: "Note",
+};
+
+export interface TableData {
+  columns: string[];
+  rows: string[][];
+}
 
 /** Where a block's words came from. Scribe uses this to prove "your words only". */
 export type Origin = "typed" | "voice" | "phlo";
@@ -33,6 +59,8 @@ export interface Block {
   trail?: string[];
   /** Transcript segment ids this block's words came from (provenance). */
   sources?: string[];
+  /** Structured meaning for non-text forms (tables). Text forms leave it unset. */
+  data?: TableData;
 }
 
 export type Role = "partner" | "scribe";

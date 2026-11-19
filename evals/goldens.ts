@@ -30,6 +30,8 @@ export type Check =
   | { absent: string[]; gap?: boolean }
   /** These headings appear in this order. */
   | { order: string[]; gap?: boolean }
+  /** A table exists whose cells contain these words. */
+  | { table: string[]; gap?: boolean }
   /** The draft got a title containing one of these words. */
   | { title: string[]; gap?: boolean };
 
@@ -67,29 +69,29 @@ export const SCENARIOS: Scenario[] = [
       },
       {
         say: "um the users I'd focus on are parents of young kids. they have thousands of photos and no time",
-        expect: [{ lands: "user", contains: ["parents of young kids"] }],
+        expect: [{ lands: "user|who", contains: ["parents of young kids"] }],
       },
       {
         say: "pain points. picking forty photos out of four thousand is the wall. and the layouts look generic so the book doesn't feel worth the money",
         expect: [
-          { lands: "pain", contains: ["forty photos", "four thousand"] },
+          { lands: "pain", contains: ["forty|40", "four thousand|4,000|4000"] },
           { lands: "pain", contains: ["generic"] },
         ],
       },
       {
         say: "no wait, scratch that, not forty, it's more like sixty photos out of four thousand",
-        expect: [{ revised: ["sixty"], trail: ["forty"] }, { absent: ["scratch that", "no wait"] }],
+        expect: [{ revised: ["sixty|60"], trail: ["forty|40"] }, { absent: ["scratch that", "no wait"] }],
       },
       {
         say: "for solutions, one, auto pick the best moments. two, a designer layout that looks like a real book",
         expect: [
-          { lands: "solution", contains: ["auto", "best moments"] },
-          { lands: "solution", contains: ["designer layout"] },
+          { lands: "solution", contains: ["auto", "best moments"], kind: "bullet" },
+          { lands: "solution", contains: ["designer layout"], kind: "bullet" },
         ],
       },
       {
         say: "the metric I'd use is the percent of started books that get printed within two weeks",
-        expect: [{ lands: "metric", contains: ["printed", "two weeks"] }, { order: ["goal", "user", "pain", "solution", "metric"] }],
+        expect: [{ lands: "metric", contains: ["printed", "two weeks|2 weeks"] }, { order: ["goal", "user|who", "pain", "solution", "metric"] }],
       },
     ],
   },
@@ -107,11 +109,11 @@ export const SCENARIOS: Scenario[] = [
       },
       {
         say: "I'm thinking we price it somewhere around a hundred fifty to two hundred dollars",
-        expect: [{ lands: "first product", contains: ["two hundred"] }],
+        expect: [{ lands: "first product|pric", contains: ["two hundred|200"] }],
       },
       {
         say: "actually make that two hundred, the premium positioning needs it",
-        expect: [{ revised: ["two hundred"], trail: ["hundred fifty"] }],
+        expect: [{ revised: ["two hundred|200"], trail: ["hundred fifty|150"] }],
       },
       {
         say: "it's for couples marking a year, a wedding, a first kid. and honestly people who gave a google photo book and felt it was too basic to display",
@@ -126,7 +128,7 @@ export const SCENARIOS: Scenario[] = [
       },
       {
         say: "I need to talk to five couples about the price before we decide",
-        expect: [{ next: ["five couples"] }],
+        expect: [{ next: ["five couples|5 couples"] }],
       },
       {
         say: "we haven't talked about how people find us. probably instagram and wedding planners",
@@ -173,7 +175,7 @@ export const SCENARIOS: Scenario[] = [
     turns: [
       {
         say: "for hiring we agreed to open two engineering roles in January",
-        expect: [{ lands: "hiring", contains: ["two engineering roles", "January"] }],
+        expect: [{ lands: "hiring|decisions", contains: ["two engineering roles|2 engineering roles", "January"], kind: "decision" }],
       },
       {
         say: "budget is flat versus last year, travel gets cut by a third",
@@ -208,6 +210,28 @@ export const SCENARIOS: Scenario[] = [
       {
         type: "biggest risk is latency, if the page lags people stop trusting it",
         expect: [{ lands: "risks", contains: ["latency"] }],
+      },
+    ],
+  },
+
+  // ---------------------------------------------------------------------------
+  {
+    id: "forms",
+    name: "Turn ideas into forms by voice",
+    role: "partner",
+    page: ["# Competitors"],
+    turns: [
+      {
+        say: "Notion is ten dollars a month and cloud only",
+        expect: [{ lands: "competitors", contains: ["Notion", "$10|ten dollars"] }],
+      },
+      {
+        say: "Granola is fourteen dollars and it's only for meetings",
+        expect: [{ lands: "competitors", contains: ["Granola", "$14|fourteen"] }],
+      },
+      {
+        say: "make these a table",
+        expect: [{ table: ["Notion", "Granola"] }, { absent: ["make these a table"] }],
       },
     ],
   },

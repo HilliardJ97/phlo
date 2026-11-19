@@ -44,6 +44,7 @@ function pick(): SettleProvider | null {
       model,
       apiKey: process.env.PHLO_API_KEY,
       mode: (process.env.PHLO_MODE as "route" | "full") || "route",
+      reasoning: (process.env.PHLO_REASONING as "none" | "low") || undefined,
     });
   }
   if (want === "claude" || (want === "auto" && key)) return key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
@@ -56,8 +57,9 @@ const orch = new Orchestrator(provider, { deadlineMs: 60_000 });
 const route = provider ? `${provider.name}${provider.model ? `-${provider.model}` : ""}${want === "open" ? `-${process.env.PHLO_MODE || "route"}` : ""}` : "local";
 
 const lc = (s: string) => s.toLowerCase();
-const has = (text: string, words: string[]) => words.every((w) => lc(text).includes(lc(w)));
-const hmatch = (heading: string, want: string) => lc(heading).includes(lc(want));
+/** Each word may list alternatives: "200|two hundred" passes on either. */
+const has = (text: string, words: string[]) => words.every((w) => w.split("|").some((alt) => lc(text).includes(lc(alt.trim()))));
+const hmatch = (heading: string, want: string) => want.split("|").some((alt) => lc(heading).includes(lc(alt.trim())));
 
 interface CheckResult {
   turn: number;
@@ -149,6 +151,10 @@ function grade(e: DocEngine, c: Check, touched: string[], source: string, before
     const ok = idx.every((i) => i >= 0) && idx.every((v, i) => i === 0 || v > idx[i - 1]);
     return r(`order: ${c.order.join(" → ")}`, ok, ok ? "" : `headings: ${hs.join(", ")}`);
   }
+  if ("table" in c) {
+    const t = blocks.find((b) => b.kind === "table" && b.data && has(b.data.rows.flat().join(" "), c.table));
+    return r(`table with ${c.table.join(", ")}`, !!t, t ? "" : "no table with those items");
+  }
   if ("title" in c) {
     const ok = c.title.some((w) => lc(e.state.title).includes(lc(w)));
     return r(`title mentions ${c.title.join("/")}`, ok, `title: "${e.state.title}"`);
@@ -163,7 +169,13 @@ function toMarkdown(e: DocEngine): string {
     const tab = b.tab === "tangent" ? " ⟶ [TANGENT · LATER]" : "";
     const trail = b.trail?.length ? `  _(earlier: ${b.trail.join(" | ")})_` : "";
     const wet = b.wet ? " [WET]" : "";
+    if (b.kind === "table" && b.data) {
+      out.push("", `| ${b.data.columns.join(" | ")} |`, `|${b.data.columns.map(() => "---").join("|")}|`, ...b.data.rows.map((r) => `| ${r.join(" | ")} |`), "");
+      continue;
+    }
     if (b.kind === "heading") out.push("", `## ${b.text}`);
+    else if (b.kind === "decision") out.push(`**Decision:** ${b.text}${trail}${wet}`);
+    else if (b.kind === "numbered") out.push(`1. ${b.text}${trail}${wet}`);
     else if (b.kind === "bullet") out.push(`- ${b.text}${trail}${tab}${wet}`);
     else if (b.kind === "question") out.push(`> ? ${b.text}${trail}${tab}${wet}`);
     else out.push(`${b.text}${trail}${tab}${wet}`);
@@ -229,6 +241,7 @@ async function run() {
       for (const c of turn.expect) {
         const g = grade(e, c, touched, text, before, ti + 1);
         results.push(g);
+        if (!g.pass && process.env.PHLO_DEBUG) console.log(`     plan: ${JSON.stringify(res.plan)}\n     issues: ${comp.issues.join("; ")}`);
         const mark = g.pass ? "✓" : g.gap ? "◌" : "✗";
         console.log(`   ${mark} t${ti + 1} ${g.check}${g.pass ? "" : `  — ${g.note}`}${g.gap && !g.pass ? " (known gap)" : ""}`);
       }

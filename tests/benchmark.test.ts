@@ -73,6 +73,7 @@ const changeRecommendation = (req: SettleRequest): SettlePlan => ({
   placements: [],
   revisions: [{ block_id: "rec", text: "Ship typing-first (Study B, n=400)." }],
   consumed: [req.wet[0].id],
+  structure: [],
   question: null,
 });
 
@@ -162,6 +163,7 @@ describe("benchmark: evidence changes the recommendation while you type elsewher
         placements: [{ wet_id: req.wet[0].id, under: "h_rec", kind: "paragraph", text: "Our analysis strongly favors a phased enterprise rollout.", tangent: false }],
         revisions: [],
         consumed: [],
+        structure: [],
         question: "Have you considered pricing?",
       })),
     );

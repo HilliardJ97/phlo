@@ -328,3 +328,65 @@ body.view-shelf .topbar .actions, body.view-reader .topbar .actions { visibility
   .page { padding-left: 16px; padding-right: 16px; }
   .blk[data-tab]::after { display: none; }
 }
+
+/* ================================================================ forms: thinking forms, numbered, tables */
+
+/* Thinking forms carry a mono label above the words */
+.blk[data-form] { padding-top: 20px; }
+.blk[data-form]::before {
+  content: attr(data-form); position: absolute; left: 0; top: 0;
+  font: var(--text-label); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-muted);
+  user-select: none; pointer-events: none;
+}
+.blk[data-kind="question"] { padding-left: var(--space-3); border-left: 1px solid currentColor; }
+.blk[data-kind="question"]::before { left: var(--space-3); }
+.blk[data-kind="decision"] { padding-left: var(--space-3); border-left: 3px solid var(--ink); }
+.blk[data-kind="decision"]::before { left: var(--space-3); }
+.blk[data-kind="decision"].wet { border-left-color: var(--ink-wet); }
+.blk[data-kind="idea"] { padding-left: var(--space-3); }
+.blk[data-kind="idea"]::before { left: var(--space-3); }
+.blk[data-kind="idea"]::after {
+  content: ""; position: absolute; left: 0; top: 4px; width: 8px; height: 8px; border-radius: var(--radius-full);
+  box-shadow: inset 0 0 0 1.5px var(--ink-muted); pointer-events: none;
+}
+.blk[data-kind="callout"] {
+  background: var(--paper-raised); border: 1px solid var(--hairline); border-radius: var(--radius-md);
+  padding: 32px var(--space-3) 14px;
+}
+.blk[data-kind="callout"]::before { left: var(--space-3); top: 12px; }
+
+/* Numbered steps: mono numerals in the margin */
+.blk[data-kind="numbered"] { padding-left: 28px; }
+.blk[data-kind="numbered"] + .blk[data-kind="numbered"] { margin-top: var(--space-2); }
+.blk[data-kind="numbered"]::before {
+  content: attr(data-n); position: absolute; left: 0; top: 0;
+  font: var(--text-meta); line-height: 26px; color: var(--ink-muted); user-select: none;
+}
+
+/* Tables: hairlines, no fills, mono header */
+.blk[data-kind="table"] { margin: var(--space-3) 0; }
+.tbl { width: 100%; border-collapse: collapse; font: var(--text-small); }
+.tbl th {
+  font: var(--text-label); letter-spacing: var(--track-label); text-transform: uppercase; color: var(--ink-muted);
+  text-align: left; padding: 6px 12px 8px 0; border-bottom: 1px solid var(--ink);
+}
+.tbl td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--hairline); vertical-align: top; color: var(--ink); }
+.tbl td:first-child { font-weight: 500; }
+.tbl th, .tbl td { outline: none; min-width: 48px; }
+.tbl th:focus, .tbl td:focus { box-shadow: inset 0 -1.5px 0 var(--cobalt); }
+.tbl-tools { display: flex; gap: var(--space-3); margin-top: var(--space-2); opacity: 0; transition: opacity var(--dur-ui) var(--ease-settle); }
+.blk[data-kind="table"]:hover .tbl-tools, .blk[data-kind="table"]:focus-within .tbl-tools { opacity: 1; }
+.tbl-tools button:hover { color: var(--ink); }
+body.room .tbl { font: var(--room-body); }
+
+/* The forms menu: Add (/) and Turn into (right-click) */
+.forms-menu {
+  position: absolute; z-index: 55; width: 320px; display: none; padding: 6px;
+  background: var(--paper-raised); border: 1px solid var(--hairline); border-radius: var(--radius-md);
+}
+.forms-menu.open { display: block; animation: rise var(--dur-settle-color) var(--ease-settle); }
+.forms-menu > .label { padding: 6px 10px 4px; }
+.form-row { display: flex; width: 100%; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 10px; border-radius: 6px; text-align: left; }
+.form-row .fname { font: var(--text-small); color: var(--ink); white-space: nowrap; }
+.form-row .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.form-row[aria-selected="true"], .form-row:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }

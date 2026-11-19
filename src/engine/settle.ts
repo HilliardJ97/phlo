@@ -15,6 +15,9 @@ import type { Op } from "./engine";
 import { newId } from "./ids";
 import type { Block, BlockKind, Draft, IdeaColor, Role } from "./model";
 import { IDEA_COLORS, sections } from "./model";
+import { turnIntoOps } from "./forms";
+
+const FORM_NAME: Partial<Record<BlockKind, string>> = { numbered: "numbered step", question: "question", decision: "decision", idea: "idea", callout: "note", bullet: "bullet", paragraph: "paragraph", heading: "heading" };
 
 // ---------------------------------------------------------------------------
 // Wire types
@@ -72,7 +75,7 @@ export const SettlePlanSchema = z.object({
       z.object({
         wet_id: z.string().describe("Which wet item these words came from."),
         under: z.string().describe("Existing heading id, new heading ref, 'here' to settle in place, or 'next' for an action item (goes to the Next list at the end)."),
-        kind: z.enum(["paragraph", "bullet", "question"]),
+        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision"]),
         text: z.string().describe("The settled words: speech cleaned up (fillers, false starts, repetition removed), meaning unchanged."),
         tangent: z.boolean().describe("True if this is an aside unrelated to the current thread (Partner only)."),
       }),
@@ -87,6 +90,17 @@ export const SettlePlanSchema = z.object({
     )
     .describe("Only when the speaker explicitly changes their mind (\"scratch that\", \"actually\", \"change X to Y\")."),
   consumed: z.array(z.string()).describe("Wet ids that were only instructions (e.g. 'new section pricing', 'scratch that') and carry no content of their own."),
+  structure: z
+    .array(
+      z.object({
+        op: z.enum(["rename", "merge", "move_before", "move_after", "park", "retype"]),
+        target: z.string().describe("Existing block or heading id the instruction is about."),
+        dest: z.string().nullable().describe("merge: heading id to merge into. move_before/move_after: heading id. Otherwise null."),
+        text: z.string().nullable().describe("rename: the new heading text. Otherwise null."),
+        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision", "idea", "callout", "heading", "table"]).nullable().describe("retype: the new kind. Otherwise null."),
+      }),
+    )
+    .describe("Only for explicit instructions about the page's structure: 'rename X to Y', 'move X under Y' (merge), 'put X before Y', 'park/remove X', 'make that a question'. The instruction's own wet id goes in consumed."),
   question: z.string().nullable().describe("Partner only: one short question if the thinking has an obvious open gap. Usually null."),
 });
 
@@ -151,6 +165,51 @@ export function buildRequest(
   };
 }
 
+/**
+ * "not forty, sixty" / "change forty to sixty": find the block being corrected
+ * by the words being replaced and put it first in `recent`, so every route
+ * (model or local) revises the right line, not merely the latest one.
+ */
+export const CORRECTION = /\b(?:not|instead of|change|swap)\s+(?:the\s+)?([\w$%.,-]+(?:\s+[\w$%.,-]+)?)\s*(?:,|\bto\b|\bbut\b|\bit'?s\b|\bmore like\b|\bactually\b)/i;
+
+const SMALL: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19,
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+
+/** "four thousand" → "4000", "a hundred fifty" → "150", "$4,000" → "$4000". Spoken and written numbers compare equal. */
+export function numberize(text: string): string {
+  const out = text.toLowerCase().replace(/(\d),(\d{3})/g, "$1$2");
+  return out.replace(/\b(?:(?:a|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)(?:[\s-]+(?:and\s+)?|\b))+/g, (m) => {
+    const words = m.trim().split(/[\s-]+/).filter((w) => w !== "and");
+    if (words.length === 1 && words[0] === "a") return m;
+    let total = 0;
+    let cur = 0;
+    for (const w of words) {
+      if (w === "a") cur = cur || 1;
+      else if (w in SMALL) cur += SMALL[w];
+      else if (w === "hundred") cur = (cur || 1) * 100;
+      else if (w === "thousand") {
+        total += (cur || 1) * 1000;
+        cur = 0;
+      }
+    }
+    return `${total + cur}${/\s$/.test(m) ? " " : ""}`;
+  });
+}
+
+export function withCorrectionTarget(req: SettleRequest): SettleRequest {
+  for (const w of req.wet) {
+    const m = CORRECTION.exec(w.text);
+    if (!m) continue;
+    const needle = numberize(m[1].replace(/[,.]+$/, "")).trim();
+    const hit = [...req.outline].reverse().find((o) => o.kind !== "heading" && numberize(o.text).includes(needle));
+    if (hit) return { ...req, recent: [hit.id, ...req.recent.filter((id) => id !== hit.id)] };
+  }
+  return req;
+}
+
 // ---------------------------------------------------------------------------
 // Text utilities
 // ---------------------------------------------------------------------------
@@ -199,8 +258,9 @@ export function stem(w: string): string {
 }
 
 export function contentWords(text: string): string[] {
+  // Split hyphenated and slashed words too: "auto-pick" is "auto" + "pick", not a new word.
   return text
-    .split(/\s+/)
+    .split(/[\s\-–—/]+/)
     .map(stem)
     .filter((w) => w.length > 2 && !STOP.has(w));
 }
@@ -251,8 +311,16 @@ export function enforceScribe(plan: SettlePlan, req: SettleRequest): { plan: Set
     return { ...p, text, under, tangent: false };
   });
 
+  const outlineText = new Map(req.outline.map((o) => [o.id, o.text]));
   const revisions = plan.revisions.filter((r) => {
-    const ok = noveltyRatio(r.text, allSpoken) <= SCRIBE_MAX_NOVELTY;
+    // A correction may keep the rest of the speaker's earlier sentence: both are their words.
+    const ok = noveltyRatio(r.text, `${allSpoken} ${outlineText.get(r.block_id) ?? ""}`) <= SCRIBE_MAX_NOVELTY;
+    if (!ok) violations++;
+    return ok;
+  });
+
+  const structure = (plan.structure ?? []).filter((st) => {
+    const ok = st.op !== "rename" || !st.text || noveltyRatio(st.text, pool) <= 0.34;
     if (!ok) violations++;
     return ok;
   });
@@ -265,7 +333,7 @@ export function enforceScribe(plan: SettlePlan, req: SettleRequest): { plan: Set
   if (plan.question) violations++;
 
   return {
-    plan: { ...plan, title, new_headings: keptHeadings, placements, revisions, question: null },
+    plan: { ...plan, title, new_headings: keptHeadings, placements, revisions, structure, question: null },
     violations,
   };
 }
@@ -282,6 +350,8 @@ export interface Compiled {
   createdIds: string[];
   issues: string[];
   question: string | null;
+  /** Human-readable summary of structural changes, for the undo toast. */
+  structural: string[];
 }
 
 /**
@@ -427,7 +497,69 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
     settledIds.push(w.id);
   }
 
-  // 5. Revisions ("scratch that"): old text folds into a trail.
+  // 5. Structure: explicit rename / merge / move / park / retype. Guarded by the revs the plan saw.
+  const structuralLabels: string[] = [];
+  const seenStruct = new Map(req.outline.map((o) => [o.id, o]));
+  for (const st of plan.structure ?? []) {
+    const t = byId.get(st.target);
+    const seen = seenStruct.get(st.target);
+    if (!t || !seen) {
+      issues.push(`bad structure target ${st.target}`);
+      continue;
+    }
+    const sectionIds = (h: string) => {
+      const i = order.indexOf(h);
+      const out = [h];
+      for (let k = i + 1; k < order.length && kindOf.get(order[k]) !== "heading"; k++) out.push(order[k]);
+      return out;
+    };
+    if (st.op === "rename" && st.text?.trim() && t.kind === "heading") {
+      const text = st.text.trim().replace(/[.:]+$/, "");
+      ops.push({ t: "update", id: t.id, expectRev: seen.rev, patch: { text, trail: [...(t.trail ?? []), t.text] } });
+      structuralLabels.push(`Renamed ${t.text} → ${text}`);
+    } else if (st.op === "merge" && st.dest && t.kind === "heading" && kindOf.get(st.dest) === "heading" && st.dest !== t.id) {
+      const moving = sectionIds(t.id).slice(1);
+      let after = sectionEnd(st.dest);
+      for (const id of moving) {
+        removeFromOrder(id);
+        ops.push({ t: "move", id, after });
+        insertAfter(id, after);
+        after = id;
+      }
+      ops.push({ t: "park", id: t.id, expectRev: seen.rev });
+      removeFromOrder(t.id);
+      structuralLabels.push(`Merged ${t.text} into ${byId.get(st.dest)?.text ?? refToId.get(st.dest) ?? "section"}`);
+    } else if ((st.op === "move_before" || st.op === "move_after") && st.dest && t.kind === "heading" && kindOf.get(st.dest) === "heading" && st.dest !== t.id) {
+      const moving = sectionIds(t.id);
+      moving.forEach(removeFromOrder);
+      let after: string | null = st.op === "move_after" ? sectionEnd(st.dest) : (order[order.indexOf(st.dest) - 1] ?? null);
+      for (const id of moving) {
+        ops.push({ t: "move", id, after });
+        insertAfter(id, after);
+        after = id;
+      }
+      structuralLabels.push(`Moved ${t.text}`);
+    } else if (st.op === "park") {
+      const ids = t.kind === "heading" ? sectionIds(t.id) : [t.id];
+      for (const id of ids) {
+        ops.push({ t: "park", id, ...(id === t.id ? { expectRev: seen.rev } : {}) });
+        removeFromOrder(id);
+      }
+      structuralLabels.push(`Parked ${t.kind === "heading" ? t.text : `“${t.text.slice(0, 32)}”`}`);
+    } else if (st.op === "retype" && st.kind && st.kind !== t.kind && (st.kind === "table" || t.kind === "table")) {
+      const conv = turnIntoOps(draft.blocks, t.id, st.kind);
+      ops.push(...conv.ops);
+      structuralLabels.push(conv.label || `Made it a ${st.kind}`);
+    } else if (st.op === "retype" && st.kind && st.kind !== t.kind) {
+      ops.push({ t: "update", id: t.id, expectRev: seen.rev, patch: { kind: st.kind, wet: false, ...(st.kind === "bullet" ? { depth: 0 } : {}) } });
+      kindOf.set(t.id, st.kind);
+      structuralLabels.push(`Made it ${/^[aeiou]/.test(st.kind) ? "an" : "a"} ${FORM_NAME[st.kind] ?? st.kind}`);
+    } else {
+      issues.push(`unsupported structure ${st.op} on ${st.target}`);
+    }
+  }
+
+  // 6. Revisions ("scratch that"): old text folds into a trail.
   const seenRev = new Map(req.outline.map((o) => [o.id, o]));
   for (const r of plan.revisions) {
     const b = byId.get(r.block_id);
@@ -453,7 +585,7 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
   // 7. Earned color: headings with real substance get an idea color (max 3).
   ops.push(...themeOps(draft, order, kindOf, ops));
 
-  return { ops, settledIds, createdIds, issues, question: plan.question };
+  return { ops, settledIds, createdIds, issues, question: plan.question, structural: structuralLabels };
 }
 
 function headingOfOrder(order: string[], kindOf: Map<string, BlockKind>, id: string): string | null {

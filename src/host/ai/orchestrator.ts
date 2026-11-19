@@ -13,7 +13,7 @@
  * measurable rather than anecdotal.
  */
 import { isExplicitCommand, localPlan } from "../../engine/local";
-import { enforceScribe, type SettlePlan, type SettleRequest, type SettleResponse } from "../../engine/settle";
+import { enforceScribe, withCorrectionTarget, type SettlePlan, type SettleRequest, type SettleResponse } from "../../engine/settle";
 import type { AskRequest, SettleProvider } from "./provider";
 
 export interface TraceEntry {
@@ -69,8 +69,9 @@ export class Orchestrator {
     };
   }
 
-  async settle(req: SettleRequest): Promise<SettleResponse> {
+  async settle(input: SettleRequest): Promise<SettleResponse> {
     const started = performance.now();
+    const req = withCorrectionTarget(input);
 
     // Supersede older work for this draft.
     this.inflight.get(req.draftId)?.abort("superseded");
@@ -90,7 +91,7 @@ export class Orchestrator {
       return { requestId: req.requestId, plan, route, model, latencyMs, note };
     };
 
-    const local = () => localPlan(req) ?? { title: null, new_headings: [], placements: [], revisions: [], consumed: [], question: null };
+    const local = () => localPlan(req) ?? { title: null, new_headings: [], placements: [], revisions: [], consumed: [], structure: [], question: null };
 
     if (!req.wet.length) return finish(local(), "local");
 

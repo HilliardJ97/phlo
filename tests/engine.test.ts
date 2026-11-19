@@ -3,7 +3,7 @@ import { DocEngine } from "../src/engine/engine";
 import type { Block, Draft } from "../src/engine/model";
 import { emptyDraft } from "../src/engine/model";
 import { localPlan } from "../src/engine/local";
-import { buildRequest, compilePlan, enforceScribe, noveltyRatio, cleanSpeech } from "../src/engine/settle";
+import { buildRequest, compilePlan, enforceScribe, noveltyRatio, cleanSpeech, numberize } from "../src/engine/settle";
 
 function blk(id: string, kind: Block["kind"], text: string, wet = false, origin: Block["origin"] = "typed"): Block {
   return { id, kind, text, wet, rev: 0, origin };
@@ -120,6 +120,12 @@ describe("settle", () => {
     return e;
   }
 
+  it("spoken and written numbers compare equal", () => {
+    expect(numberize("picking forty photos out of four thousand")).toBe("picking 40 photos out of 4000");
+    expect(numberize("a hundred fifty to two hundred dollars")).toBe("150 to 200 dollars");
+    expect(numberize("Picking 40 photos out of 4,000")).toBe("picking 40 photos out of 4000");
+  });
+
   it("cleans fillers and repetition", () => {
     expect(cleanSpeech("um so the the price is, you know, too high")).toBe("The price is, too high");
     expect(cleanSpeech("okay so we charge per seat")).toBe("We charge per seat");
@@ -176,6 +182,28 @@ describe("settle", () => {
     expect(localPlan(req)!.placements[0]).toMatchObject({ under: "h9", text: "Grandparents." });
   });
 
+  it("voice restructuring: rename, merge, park, retype — and none of it lands as text", () => {
+    const e = seeded();
+    const run = (text: string, recent: string[] = []) => {
+      const id = `w${Math.random().toString(36).slice(2, 7)}`;
+      e.commit({ id: `i${id}`, actor: "voice", label: "speech", ops: [{ t: "insert", block: blk(id, "paragraph", text, true, "voice"), after: "p3" }] });
+      const req = buildRequest(e.snapshot(), [id], { currentHeadingId: null, recent });
+      const c = compilePlan(e.snapshot(), req, localPlan(req)!);
+      expect(e.commit({ id: `s${id}`, actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
+      return c.structural;
+    };
+    expect(run("rename pricing to business model")).toEqual(["Renamed Pricing → Business model"]);
+    expect(e.block("h2")!.trail).toEqual(["Pricing"]);
+    expect(run("move problem under business model, it's all one thing")).toEqual(["Merged Problem into Business model"]);
+    expect(e.state.blocks.map((b) => b.id)).toEqual(["h2", "p2", "p1", "h3", "p3"]);
+    expect(e.state.parked.map((b) => b.id)).toContain("h1");
+    expect(run("make that a question", ["p3"])).toEqual(["Made it a question"]);
+    expect(e.block("p3")!.kind).toBe("question");
+    expect(run("park recommendation")).toEqual(["Parked Recommendation"]);
+    expect(e.state.blocks.map((b) => b.id)).toEqual(["h2", "p2", "p1"]);
+    expect(e.state.blocks.map((b) => b.text).join(" ")).not.toMatch(/rename|move|park|make that/i);
+  });
+
   it("a tangent never lands inside the section being worked on", () => {
     const e = withWet("oh also, could this be a subscription, one book a year");
     const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: [] });
@@ -218,6 +246,7 @@ describe("settle", () => {
         placements: [{ wet_id: "w1", under: "h", kind: "paragraph", text: "Onboarding friction drives significant churn among enterprise prospects.", tangent: true }],
         revisions: [],
         consumed: [],
+        structure: [],
         question: "Have you considered SSO?",
       },
       req,
@@ -231,6 +260,26 @@ describe("settle", () => {
     expect(noveltyRatio(plan.placements[0].text, "we lose people at the signup step")).toBe(0);
   });
 
+  it("scribe guard accepts the speaker's own words in new shapes", () => {
+    const e = withWet("for solutions one auto pick the best moments");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: ["p3"] });
+    const { plan, violations } = enforceScribe(
+      {
+        title: null,
+        new_headings: [{ ref: "s", text: "Solutions", after: null }],
+        placements: [{ wet_id: "w1", under: "s", kind: "bullet", text: "Auto-pick the best moments", tangent: false }],
+        revisions: [{ block_id: "p3", text: "Ship the voice-first editor with auto-pick." }],
+        consumed: [],
+        structure: [],
+        question: null,
+      },
+      req,
+    );
+    expect(violations).toBe(0);
+    expect(plan.placements[0].text).toBe("Auto-pick the best moments");
+    expect(plan.revisions).toHaveLength(1);
+  });
+
   it("unknown ids from a model are dropped, never guessed", () => {
     const e = withWet("hello there friend");
     const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
@@ -240,6 +289,7 @@ describe("settle", () => {
       placements: [{ wet_id: "nope", under: "h2", kind: "paragraph", text: "x", tangent: false }],
       revisions: [{ block_id: "ghost", text: "y" }],
       consumed: [],
+      structure: [],
       question: null,
     });
     expect(c.issues.length).toBeGreaterThanOrEqual(2);

@@ -10,7 +10,8 @@
  */
 import type { DocEngine, Op } from "../../engine/engine";
 import { newId } from "../../engine/ids";
-import type { Block, Draft } from "../../engine/model";
+import { tableSummary } from "../../engine/forms";
+import { FORM_LABEL, type Block, type Draft, type TableData } from "../../engine/model";
 
 export interface EditorCallbacks {
   /** Enter on an empty wet line: the paragraph is finished. */
@@ -20,6 +21,10 @@ export interface EditorCallbacks {
   onPaste(e: ClipboardEvent): boolean;
   onUndo(): void;
   onRedo(): void;
+  /** "/" typed at the start of a line: show the forms menu (query = text after "/"), or null to hide. */
+  onSlash?(id: string | null, query: string): void;
+  /** Lets an open menu claim arrow/enter/escape keys. Return true if handled. */
+  onMenuKey?(e: KeyboardEvent): boolean;
 }
 
 /** Motion comes from the tokens, never from component code. */
@@ -73,7 +78,23 @@ export class Editor {
     root.setAttribute("aria-label", "Draft");
     root.addEventListener("keydown", (e) => this.onKeyDown(e));
     root.addEventListener("beforeinput", (e) => this.onBeforeInput(e as InputEvent));
-    root.addEventListener("input", () => !this.composing && this.syncFromDom());
+    // Table cells edit the table's data, not text: handle them before the page sync.
+    root.addEventListener(
+      "input",
+      (e) => {
+        const cell = (e.target as HTMLElement)?.closest?.("td,th") as HTMLElement | null;
+        if (cell) {
+          e.stopImmediatePropagation();
+          this.onCellInput(cell);
+        }
+      },
+      true,
+    );
+    root.addEventListener("input", () => {
+      if (this.composing) return;
+      this.syncFromDom();
+      this.checkSlash();
+    });
     root.addEventListener("compositionstart", () => (this.composing = true));
     root.addEventListener("compositionend", () => {
       this.composing = false;
@@ -158,9 +179,11 @@ export class Editor {
     const caretSave = focusedId ? this.caret() : null;
     const seen = new Set<string>();
     let num = 0;
+    let step = 0;
     let prev: HTMLElement | null = null;
     for (const b of draft.blocks) {
       if (!inPage(b)) continue;
+      step = b.kind === "numbered" ? step + 1 : 0;
       seen.add(b.id);
       let el = this.els.get(b.id);
       if (!el) {
@@ -170,6 +193,7 @@ export class Editor {
         this.els.set(b.id, el);
       }
       if (b.kind === "heading" && !NEXT.test(b.text)) num++;
+      setAttr(el, "data-n", b.kind === "numbered" ? String(step) : undefined);
       this.paint(el, b, num, opts.dim?.has(b.id) ?? false);
       let want: ChildNode | null = prev ? prev.nextSibling : this.root.firstChild;
       // Interface elements (live words, PHLO ASKS) may sit between blocks: step over them.
@@ -201,6 +225,133 @@ export class Editor {
     return this.els.get(id);
   }
 
+  // ------------------------------------------------------------------ tables
+
+  /** A table is an island: its cells are editable, its meaning lives in block.data. */
+  private paintTable(el: HTMLElement, b: Block) {
+    el.contentEditable = "false";
+    const data: TableData = b.data ?? { columns: ["Item"], rows: [[""]] };
+    const sig = JSON.stringify(data);
+    if (el.dataset.sig === sig) return;
+    const active = document.activeElement as HTMLElement | null;
+    const focusAt = active && el.contains(active) ? { r: active.dataset.r, c: active.dataset.c } : null;
+    el.dataset.sig = sig;
+    el.textContent = "";
+    const table = document.createElement("table");
+    table.className = "tbl";
+    const head = table.createTHead().insertRow();
+    data.columns.forEach((col, c) => {
+      const th = document.createElement("th");
+      th.contentEditable = "true";
+      th.dataset.r = "-1";
+      th.dataset.c = String(c);
+      th.textContent = col;
+      head.appendChild(th);
+    });
+    const body = table.createTBody();
+    data.rows.forEach((row, r) => {
+      const tr = body.insertRow();
+      data.columns.forEach((_, c) => {
+        const td = tr.insertCell();
+        td.contentEditable = "true";
+        td.dataset.r = String(r);
+        td.dataset.c = String(c);
+        td.textContent = row[c] ?? "";
+      });
+    });
+    const tools = document.createElement("div");
+    tools.className = "tbl-tools";
+    for (const [label, fn] of [
+      ["+ Row", (d: TableData) => ({ ...d, rows: [...d.rows, d.columns.map(() => "")] })],
+      ["+ Column", (d: TableData) => ({ columns: [...d.columns, `Column ${d.columns.length + 1}`], rows: d.rows.map((r) => [...r, ""]) })],
+    ] as const) {
+      const btn = document.createElement("button");
+      btn.className = "label";
+      btn.textContent = label;
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => this.updateTable(b.id, fn));
+      tools.appendChild(btn);
+    }
+    el.append(table, tools);
+    if (focusAt) {
+      const cell = el.querySelector<HTMLElement>(`[data-r="${focusAt.r}"][data-c="${focusAt.c}"]`);
+      if (cell) placeCaretEnd(cell);
+    }
+  }
+
+  private updateTable(id: string, fn: (d: TableData) => TableData, coalesce?: string) {
+    const b = this.engine().block(id);
+    if (!b?.data) return;
+    const data = fn(structuredClone(b.data));
+    this.commit([{ t: "update", id, patch: { data, text: tableSummary(data) } }], "Edit table", coalesce);
+  }
+
+  private onCellInput(cell: HTMLElement) {
+    const el = cell.closest<HTMLElement>(".blk");
+    const id = el?.dataset.id;
+    if (!el || !id) return;
+    const r = Number(cell.dataset.r);
+    const c = Number(cell.dataset.c);
+    const text = (cell.textContent ?? "").replace(/\n/g, " ");
+    this.updateTable(
+      id,
+      (d) => {
+        if (r < 0) d.columns[c] = text;
+        else d.rows[r][c] = text;
+        // Keep the painted signature in step so typing never rebuilds the table under the caret.
+        el.dataset.sig = JSON.stringify(d);
+        return d;
+      },
+      `cell:${id}:${r}:${c}`,
+    );
+  }
+
+  /** Tab moves between cells; Enter goes down a row, adding one at the end. */
+  private tableKey(e: KeyboardEvent, cell: HTMLElement): boolean {
+    const el = cell.closest<HTMLElement>(".blk")!;
+    const id = el.dataset.id!;
+    const r = Number(cell.dataset.r);
+    const c = Number(cell.dataset.c);
+    const b = this.engine().block(id);
+    if (!b?.data) return false;
+    const cols = b.data.columns.length;
+    const go = (rr: number, cc: number) => {
+      const next = el.querySelector<HTMLElement>(`[data-r="${rr}"][data-c="${cc}"]`);
+      if (next) placeCaretEnd(next);
+      return !!next;
+    };
+    if (e.key === "Tab") {
+      e.preventDefault();
+      const idx = (r + 1) * cols + c + (e.shiftKey ? -1 : 1);
+      const rr = Math.floor(idx / cols) - 1;
+      const cc = ((idx % cols) + cols) % cols;
+      if (!go(rr, cc) && !e.shiftKey) {
+        this.updateTable(id, (d) => ({ ...d, rows: [...d.rows, d.columns.map(() => "")] }));
+        requestAnimationFrame(() => go(b.data!.rows.length, 0));
+      }
+      return true;
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (!go(r + 1, c)) {
+        this.updateTable(id, (d) => ({ ...d, rows: [...d.rows, d.columns.map(() => "")] }));
+        requestAnimationFrame(() => go(r + 1, c));
+      }
+      return true;
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------------ slash menu
+
+  private checkSlash() {
+    const c = this.caret();
+    const b = c ? this.engine().block(c.id) : null;
+    if (b && b.kind !== "table" && b.kind !== "heading" && /^\/[\w ]{0,20}$/.test(b.text) && c!.offset === b.text.length) {
+      this.cb.onSlash?.(b.id, b.text.slice(1).trim().toLowerCase());
+    } else this.cb.onSlash?.(null, "");
+  }
+
   private paint(el: HTMLElement, b: Block, num: number, dim: boolean) {
     el.dataset.kind = b.kind;
     el.classList.toggle("wet", b.wet);
@@ -213,6 +364,18 @@ export class Editor {
     el.style.setProperty("--depth", String(b.depth ?? 0));
     if (b.kind === "heading") el.setAttribute("role", "heading");
     else el.removeAttribute("role");
+    setAttr(el, "data-form", FORM_LABEL[b.kind]);
+
+    if (b.kind === "table") {
+      this.paintTable(el, b);
+      return;
+    }
+    if (el.dataset.sig !== undefined) {
+      // Was a table: back to an editable text block.
+      el.removeAttribute("contenteditable");
+      delete el.dataset.sig;
+      el.textContent = "";
+    }
 
     if (textOf(el) !== b.text) {
       // Rewrite text but keep UI children (trail) intact.
@@ -292,6 +455,10 @@ export class Editor {
         const id = n.dataset.id;
         domIds.add(id);
         const b = model.get(id)!;
+        if (b.kind === "table") {
+          prevId = id;
+          continue;
+        }
         const text = textOf(n);
         if (text !== b.text) {
           const shortcut = markdownShortcut(b, text);
@@ -332,6 +499,10 @@ export class Editor {
 
   private onKeyDown(e: KeyboardEvent) {
     if (e.isComposing) return;
+    if (this.cb.onMenuKey?.(e)) return;
+    const cell = (e.target as HTMLElement)?.closest?.("td,th") as HTMLElement | null;
+    if (cell && this.tableKey(e, cell)) return;
+    if (cell && e.key !== "z") return;
     const mod = e.metaKey || e.ctrlKey;
     if (mod && e.key.toLowerCase() === "z") {
       e.preventDefault();
@@ -474,6 +645,17 @@ export class Editor {
     this.render(eng.state);
     this.setCaret(lastId, (lines[lines.length - 1] ?? "").length);
   }
+}
+
+function placeCaretEnd(el: HTMLElement) {
+  el.focus();
+  const sel = document.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
 }
 
 function setAttr(el: HTMLElement, name: string, v: string | undefined) {

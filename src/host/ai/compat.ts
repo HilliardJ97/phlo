@@ -23,16 +23,28 @@ export interface CompatConfig {
   model: string;
   apiKey?: string;
   mode?: "route" | "full";
+  /**
+   * Hidden reasoning before answering. Placement doesn't need it: measured on
+   * qwen3:1.7b, thinking cost 506 tokens / 33 s vs 3 tokens / 0.3 s for the same
+   * answer. Default "none" for models on this Mac; unset (provider default) for
+   * hosted endpoints, which may not accept "none".
+   */
+  reasoning?: "none" | "minimal" | "low" | "medium" | "high";
 }
 
 export class CompatProvider implements SettleProvider {
   readonly name: string;
   readonly model: string;
+  private reasoning: CompatConfig["reasoning"];
+  private openrouter: boolean;
 
   constructor(private cfg: CompatConfig) {
     this.model = cfg.model;
     const host = safeHost(cfg.baseUrl);
-    this.name = host === "127.0.0.1" || host === "localhost" ? "local-model" : host;
+    const local = host === "127.0.0.1" || host === "localhost";
+    this.name = local ? "local-model" : host;
+    this.reasoning = cfg.reasoning ?? (local ? "none" : undefined);
+    this.openrouter = host.endsWith("openrouter.ai");
   }
 
   available(): boolean {
@@ -63,13 +75,30 @@ export class CompatProvider implements SettleProvider {
         body: JSON.stringify({
           model: this.cfg.model,
           messages,
-          temperature: 0,
-          max_tokens: this.cfg.mode === "route" ? 800 : 3000,
+          // Reasoning models (GPT-6, o-series) reject temperature; deterministic decoding only where it's accepted.
+          ...(this.reasoning && this.reasoning !== "none" ? {} : { temperature: 0 }),
+          max_tokens: this.cfg.mode === "route" ? 600 : 1500,
+          // OpenRouter takes `reasoning` and can route to the lowest-latency host; others take `reasoning_effort`.
+          ...(this.openrouter
+            ? { ...(this.reasoning ? { reasoning: { effort: this.reasoning === "none" ? "minimal" : this.reasoning, exclude: true } } : {}), provider: { sort: "latency", require_parameters: true } }
+            : this.reasoning
+              ? { reasoning_effort: this.reasoning }
+              : {}),
           response_format: { type: "json_schema", json_schema: { name, strict: true, schema: jsonSchema } },
         }),
       });
       if (res.status === 429) throw Object.assign(new Error("Model rate limit reached"), { code: "USAGE_LIMIT" });
-      if (!res.ok) throw new Error(`Model endpoint returned ${res.status}`);
+      if (!res.ok) {
+        // Surface the endpoint's own message (never headers or keys) so a misconfigured model is diagnosable.
+        let detail = "";
+        try {
+          const err = (await res.json()) as { error?: { message?: string } };
+          detail = err.error?.message ? `: ${err.error.message.slice(0, 160)}` : "";
+        } catch {
+          /* no body */
+        }
+        throw new Error(`Model endpoint returned ${res.status}${detail}`);
+      }
       const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
       const raw = stripThinking(json.choices?.[0]?.message?.content ?? "");
       try {

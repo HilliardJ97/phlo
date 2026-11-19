@@ -19,7 +19,7 @@ beforeAll(async () => {
       const j = JSON.parse(body);
       seen.push(j);
       const wetId = /\[(w_[^\]]+)\]/.exec(j.messages[1].content)?.[1] ?? "w";
-      const plan = { title: null, new_headings: [], placements: [{ wet_id: wetId, under: "h2", kind: "paragraph", text: "", tangent: false }], revisions: [], consumed: [], question: null };
+      const plan = { title: null, new_headings: [], placements: [{ wet_id: wetId, under: "h2", kind: "paragraph", text: "", tangent: false }], revisions: [], consumed: [], structure: [], question: null };
       const content = mode === "broken-then-ok" && seen.length % 2 === 1 ? "<think>hmm</think> {not json" : `<think>placing</think>\n\`\`\`json\n${JSON.stringify(plan)}\n\`\`\``;
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ choices: [{ message: { content } }] }));

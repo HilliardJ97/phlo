@@ -7,7 +7,7 @@
  * configured, so Phlo always settles.
  */
 import type { SettlePlan, SettleRequest, WetItem } from "./settle";
-import { cleanSpeech, contentWords, ensureSentence } from "./settle";
+import { cleanSpeech, contentWords, ensureSentence, numberize } from "./settle";
 
 const NEW_SECTION =
   /^(?:ok(?:ay)?,?\s+)?(?:new|add(?: a)?|start(?: a)?|make(?: a)?|create(?: a)?)\s+(?:section|heading|header)(?:\s+(?:called|named|for|on|about))?\s*[:,-]?\s*(.+?)[.!]?$/i;
@@ -15,6 +15,13 @@ const UNDER = /^(?:under|in|for|to)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))
 const SCRATCH = /^(?:scratch that|strike that|actually,?\s*no|no wait|never ?mind|change that)[,.:!\s-]*(?:(?:it'?s|make it|to|instead|rather)[,:\s]+)?(.*)$/i;
 const TANGENT = /^(?:oh,?\s+)?(?:also|side note|tangent|unrelated|random thought|by the way|btw)[,:\s]+(.+)$/i;
 const ACTION = /^(?:(?:i|we)\s+(?:need|have|should|must|will|gotta|got)\s+to\s+|todo[,:\s]+|to do[,:\s]+|next step[,:\s]+|remember to\s+|action item[,:\s]+)(.+)$|^(?:talk to|call|email|text|follow up with|send|schedule|book|ask|reach out to|interview)\s+.+$/i;
+// Structure: instructions about the page, never content.
+const RENAME = /^(?:ok(?:ay)?,?\s+)?(?:rename|retitle|call)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s+(?:to|as)\s+(.+?)[.!]?$/i;
+const MERGE = /^(?:ok(?:ay)?,?\s+)?(?:move|put|merge|fold)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s+(?:under|into|in|with)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?(?:\s*[,.;—-].*)?$/i;
+const MOVE = /^(?:ok(?:ay)?,?\s+)?(?:move|put)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s+(before|above|after|below)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?[.!]?$/i;
+const PARK = /^(?:ok(?:ay)?,?\s+)?(?:park|remove|delete|drop|get rid of)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?[.!]?$/i;
+const RETYPE = /^(?:ok(?:ay)?,?\s+)?(?:make|turn)\s+(?:that|this|it|these|those|them|the last (?:one|line|point))\s+(?:into\s+)?(?:a|an)?\s*(bullets?|questions?|headings?|paragraphs?|numbered(?: list| steps)?|steps|decisions?|ideas?|notes?|callouts?|table)[.!]?$/i;
+const RETYPE_KIND: Record<string, string> = { bullet: "bullet", bullets: "bullet", question: "question", questions: "question", heading: "heading", headings: "heading", paragraph: "paragraph", paragraphs: "paragraph", numbered: "numbered", "numbered list": "numbered", "numbered steps": "numbered", steps: "numbered", decision: "decision", decisions: "decision", idea: "idea", ideas: "idea", note: "callout", notes: "callout", callout: "callout", callouts: "callout", table: "table" };
 const QUESTION_START = /^(?:what|why|how|who|when|where|which|should|could|would|can|do|does|is|are|will)\b/i;
 
 export interface LocalOptions {
@@ -25,20 +32,21 @@ export interface LocalOptions {
 /** True when every wet item is an explicit instruction the local route fully understands. */
 export function isExplicitCommand(text: string): boolean {
   const t = text.trim();
-  return NEW_SECTION.test(t) || UNDER.test(t) || SCRATCH.test(t);
+  return [NEW_SECTION, UNDER, SCRATCH, RENAME, MERGE, MOVE, PARK, RETYPE].some((re) => re.test(t));
 }
 
-function kindFor(text: string, origin: WetItem["origin"]): "paragraph" | "bullet" | "question" {
+function kindFor(text: string, origin: WetItem["origin"]): "paragraph" | "bullet" | "question" | "decision" {
   const t = text.trim();
+  if (/\b(?:we|i)(?:'ve| have)?\s+(?:decided|agreed|are going with|'re going with|chose|picked)\b/i.test(t)) return "decision";
   if (/^[-*•]\s+/.test(t)) return "bullet";
   if (/\?$/.test(t) || (origin === "voice" && QUESTION_START.test(t) && t.split(/\s+/).length < 16)) return "question";
   return "paragraph";
 }
 
-function polish(text: string, kind: "paragraph" | "bullet" | "question"): string {
+function polish(text: string, kind: "paragraph" | "bullet" | "question" | "decision"): string {
   let t = cleanSpeech(text.replace(/^[-*•]\s+/, ""));
   if (kind === "question") t = t.replace(/[.!]+$/, "").replace(/\?*$/, "?");
-  else if (kind === "paragraph") t = ensureSentence(t);
+  else if (kind === "paragraph" || kind === "decision") t = ensureSentence(t);
   return t;
 }
 
@@ -91,13 +99,51 @@ function findHeadingByName(name: string, req: SettleRequest, refs: Map<string, s
 }
 
 export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePlan | null {
-  const plan: SettlePlan = { title: null, new_headings: [], placements: [], revisions: [], consumed: [], question: null };
+  const plan: SettlePlan = { title: null, new_headings: [], placements: [], revisions: [], consumed: [], structure: [], question: null };
   const newRefs = new Map<string, string>(); // heading text -> ref
   let lastNewHeading: string | null = null;
   let refN = 0;
 
   for (const w of req.wet) {
     const text = w.text.trim();
+
+    // Structure commands resolve only against headings that exist; otherwise they're just words.
+    const rn = RENAME.exec(text);
+    const rnId = rn ? findHeadingByName(rn[1], req, newRefs) : null;
+    if (rn && rnId) {
+      plan.structure.push({ op: "rename", target: rnId, dest: null, text: headingText(rn[2]), kind: null });
+      plan.consumed.push(w.id);
+      continue;
+    }
+    const mv = MOVE.exec(text);
+    const mvA = mv ? findHeadingByName(mv[1], req, newRefs) : null;
+    const mvB = mv ? findHeadingByName(mv[3], req, newRefs) : null;
+    if (mv && mvA && mvB && mvA !== mvB) {
+      plan.structure.push({ op: /before|above/i.test(mv[2]) ? "move_before" : "move_after", target: mvA, dest: mvB, text: null, kind: null });
+      plan.consumed.push(w.id);
+      continue;
+    }
+    const mg = MERGE.exec(text);
+    const mgA = mg ? findHeadingByName(mg[1], req, newRefs) : null;
+    const mgB = mg ? findHeadingByName(mg[2], req, newRefs) : null;
+    if (mg && mgA && mgB && mgA !== mgB) {
+      plan.structure.push({ op: "merge", target: mgA, dest: mgB, text: null, kind: null });
+      plan.consumed.push(w.id);
+      continue;
+    }
+    const pk = PARK.exec(text);
+    const pkId = pk ? findHeadingByName(pk[1], req, newRefs) : null;
+    if (pk && pkId) {
+      plan.structure.push({ op: "park", target: pkId, dest: null, text: null, kind: null });
+      plan.consumed.push(w.id);
+      continue;
+    }
+    const rt = RETYPE.exec(text);
+    if (rt && req.recent[0]) {
+      plan.structure.push({ op: "retype", target: req.recent[0], dest: null, text: null, kind: (RETYPE_KIND[rt[1].toLowerCase()] ?? "paragraph") as "bullet" });
+      plan.consumed.push(w.id);
+      continue;
+    }
 
     const ns = NEW_SECTION.exec(text);
     if (ns) {
@@ -124,6 +170,20 @@ export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePl
     if (sc) {
       const target = req.recent[0];
       const replacement = sc[1]?.trim();
+      const partial = /\bnot\s+([\w$%.-]+(?:\s+[\w$%.-]+)?)\s*,\s*(?:(?:it'?s|more like|actually|but|rather)\s+)*([\w$%.-]+(?:\s+[\w$%.-]+)?)/i.exec(text);
+      const prevT = target ? req.outline.find((o) => o.id === target) : null;
+      const oldN = partial ? numberize(partial[1]).trim() : "";
+      if (partial && prevT && (prevT.text.toLowerCase().includes(partial[1].toLowerCase()) || numberize(prevT.text).includes(oldN))) {
+        // "not forty, it's more like sixty": swap just the corrected words, keep the rest of the line.
+        const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const replacement = partial[2].split(/\s+/)[0];
+        const usesDigits = !prevT.text.toLowerCase().includes(partial[1].toLowerCase());
+        const re = usesDigits ? new RegExp(`\\b${esc(oldN)}\\b`) : new RegExp(esc(partial[1]), "i");
+        const target = usesDigits ? prevT.text.replace(/(\d),(\d{3})/g, "$1$2") : prevT.text;
+        plan.revisions.push({ block_id: prevT.id, text: target.replace(re, usesDigits ? numberize(replacement).trim() : replacement) });
+        plan.consumed.push(w.id);
+        continue;
+      }
       if (target && replacement) {
         const prev = req.outline.find((o) => o.id === target);
         const kind = prev?.kind === "bullet" || prev?.kind === "question" ? prev.kind : "paragraph";
