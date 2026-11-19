@@ -1,95 +1,242 @@
 /**
- * Live settle-quality eval. Runs each case through the real orchestrator
- * (model route) and scores placement, invention, and latency.
+ * Settle eval: replays each golden scenario turn by turn through the same path
+ * the app uses (buildRequest -> Orchestrator -> compilePlan -> DocEngine.commit)
+ * and grades every turn against its goldens.
  *
- *   ANTHROPIC_API_KEY=... npm run eval
+ *   npm run eval                      # Claude if ANTHROPIC_API_KEY is set, else local rules
+ *   npm run eval -- --local           # force the local route
+ *   npm run eval -- --only interview  # one scenario
  *
- * Metrics per case: correct placements, wrong-target placements, Scribe
- * invention violations, latency. Without a key, it runs the local route so
- * the harness itself stays tested.
+ * Writes evals/out/<route>/<scenario>.md (the final page, for eyeballing) and
+ * evals/out/<route>/report.json. Metrics: checks passed, wrong-target placements,
+ * invented-word rate, instructions transcribed, latency p50/p95.
  */
+import { mkdirSync, writeFileSync } from "node:fs";
+import * as path from "node:path";
 import { DocEngine, type Op } from "../src/engine/engine";
-import { localPlan } from "../src/engine/local";
+import { newId } from "../src/engine/ids";
 import { emptyDraft, type Block } from "../src/engine/model";
-import { buildRequest, compilePlan, headingOf, noveltyRatio } from "../src/engine/settle";
+import { buildRequest, compilePlan, headingOf, noveltyRatio, NEXT_RE } from "../src/engine/settle";
 import { ClaudeProvider } from "../src/host/ai/claude";
 import { Orchestrator } from "../src/host/ai/orchestrator";
+import { SCENARIOS, type Check, type Scenario } from "./goldens";
 
-interface Case {
-  name: string;
-  role?: "partner" | "scribe";
-  page: [kind: Block["kind"], text: string][];
-  speech: string;
-  /** Expected heading text each settled idea lands under (in order). null = no heading. */
-  expect: (string | null)[];
+const args = process.argv.slice(2);
+const forceLocal = args.includes("--local");
+const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
+const key = forceLocal ? undefined : process.env.ANTHROPIC_API_KEY;
+const provider = key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
+const orch = new Orchestrator(provider, { deadlineMs: 30_000 });
+const route = provider ? provider.model : "local";
+
+const lc = (s: string) => s.toLowerCase();
+const has = (text: string, words: string[]) => words.every((w) => lc(text).includes(lc(w)));
+const hmatch = (heading: string, want: string) => lc(heading).includes(lc(want));
+
+interface CheckResult {
+  turn: number;
+  check: string;
+  pass: boolean;
+  gap: boolean;
+  note: string;
 }
 
-const PAGE: Case["page"] = [
-  ["heading", "Problem"],
-  ["paragraph", "Interviews are hard to follow when you are managing a doc."],
-  ["heading", "Pricing"],
-  ["paragraph", "Per seat for teams."],
-  ["heading", "Risks"],
-  ["paragraph", "Latency could break trust."],
-];
+function seed(s: Scenario): DocEngine {
+  const e = new DocEngine({ ...emptyDraft(`eval_${s.id}`), role: s.role });
+  let after: string | null = null;
+  const ops: Op[] = s.page.map((line) => {
+    const id = newId("b");
+    const heading = line.startsWith("# ");
+    const op: Op = { t: "insert", block: { id, kind: heading ? "heading" : "paragraph", text: heading ? line.slice(2) : line, wet: false, rev: 0, origin: "typed" }, after };
+    after = id;
+    return op;
+  });
+  if (ops.length) e.commit({ id: "seed", actor: "user", label: "seed", ops });
+  return e;
+}
 
-const CASES: Case[] = [
-  { name: "routes to pricing", page: PAGE, speech: "um I think we should also have a free tier for students", expect: ["Pricing"] },
-  { name: "routes to risks", page: PAGE, speech: "another worry is that people won't trust the AI to write in front of a client", expect: ["Risks"] },
-  { name: "splits two ideas", page: PAGE, speech: "the real problem is context switching, and on price maybe twelve dollars a month", expect: ["Problem", "Pricing"] },
-  { name: "new topic gets a heading", page: PAGE, speech: "for go to market we should start with product managers who do interviews", expect: ["*new*"] },
-  { name: "scribe keeps words", role: "scribe", page: PAGE, speech: "so basically the thing is we lose people right at signup you know", expect: ["*any*"] },
-];
-
-async function main() {
-  const key = process.env.ANTHROPIC_API_KEY;
-  const provider = key ? new ClaudeProvider(() => key) : null;
-  const orch = new Orchestrator(provider, { deadlineMs: 30_000 });
-  console.log(`route: ${provider ? provider.model : "local (no key)"}\n`);
-  let correct = 0;
-  let wrong = 0;
-  let violations = 0;
-  const lat: number[] = [];
-
-  for (const c of CASES) {
-    const e = new DocEngine({ ...emptyDraft("eval"), role: c.role ?? "partner" });
-    let after: string | null = null;
-    const ops: Op[] = c.page.map(([kind, text], i) => {
-      const id = `p${i}`;
-      const op: Op = { t: "insert", block: { id, kind, text, wet: false, rev: 0, origin: "typed" }, after };
-      after = id;
-      return op;
-    });
-    ops.push({ t: "insert", block: { id: "w", kind: "paragraph", text: c.speech, wet: true, rev: 0, origin: "voice" }, after });
-    e.commit({ id: "seed", actor: "user", label: "seed", ops });
-
-    const req = buildRequest(e.snapshot(), ["w"], { currentHeadingId: null, recent: [] });
-    const res = provider ? await orch.settle(req) : { plan: localPlan(req)!, latencyMs: 0, route: "local" as const };
-    lat.push(res.latencyMs);
-    const comp = compilePlan(e.state, req, res.plan);
-    e.commit({ id: "s", actor: "phlo", label: "Settle", ops: comp.ops });
-
-    const headings = new Set(c.page.filter((p) => p[0] === "heading").map((p) => p[1]));
-    const placed = comp.settledIds.map((id) => {
-      const h = headingOf(e.state.blocks, id);
-      return h ? e.block(h)!.text : null;
-    });
-    let ok = 0;
-    c.expect.forEach((want, i) => {
-      const got = placed[i];
-      const hit = want === "*any*" || (want === "*new*" ? !!got && !headings.has(got) : got === want);
-      if (hit) ok++;
-    });
-    const caseWrong = c.expect.length - ok;
-    correct += ok;
-    wrong += caseWrong;
-    if (c.role === "scribe") {
-      for (const id of comp.settledIds) if (noveltyRatio(e.block(id)?.text ?? "", c.speech) > 0.2) violations++;
-    }
-    console.log(`${caseWrong ? "✗" : "✓"} ${c.name.padEnd(28)} ${res.route.padEnd(8)} ${String(res.latencyMs).padStart(6)}ms  -> ${placed.map((p) => p ?? "(here)").join(", ")}`);
+/** Same rule as the app: end of the current section, else end of page before Next. */
+function anchor(e: DocEngine, heading: string | null): string | null {
+  const blocks = e.state.blocks.filter((b) => b.tab !== "tangent");
+  if (heading && blocks.some((b) => b.id === heading)) {
+    let i = blocks.findIndex((b) => b.id === heading);
+    while (i + 1 < blocks.length && blocks[i + 1].kind !== "heading") i++;
+    return blocks[i].id;
   }
-  lat.sort((a, b) => a - b);
-  console.log(`\ncorrect=${correct} wrongTarget=${wrong} scribeViolations=${violations} p50=${lat[Math.floor(lat.length / 2)]}ms max=${lat[lat.length - 1]}ms`);
+  const n = blocks.findIndex((b) => b.kind === "heading" && NEXT_RE.test(b.text));
+  if (n > 0) return blocks[n - 1].id;
+  return blocks.at(-1)?.id ?? null;
 }
 
-void main();
+function headingText(e: DocEngine, id: string): string | null {
+  const h = headingOf(e.state.blocks, id);
+  return h ? (e.block(h)?.text ?? null) : null;
+}
+
+function grade(e: DocEngine, c: Check, touched: string[], source: string, before: Set<string>, turn: number): CheckResult {
+  const blocks = e.state.blocks;
+  const pageText = blocks.map((b) => b.text).join("\n");
+  const gap = !!c.gap;
+  const r = (check: string, pass: boolean, note: string): CheckResult => ({ turn, check, pass, gap, note });
+
+  if ("lands" in c) {
+    const cands = touched.map((id) => e.block(id)).filter((b): b is Block => !!b && !b.wet && b.tab !== "tangent");
+    const hit = cands.find((b) => {
+      const h = headingText(e, b.id) ?? "";
+      const okHeading = c.lands === "*new*" ? !!h && !before.has(lc(h)) : hmatch(h, c.lands);
+      return okHeading && has(b.text, c.contains) && (!c.kind || b.kind === c.kind);
+    });
+    const where = cands.map((b) => `"${b.text.slice(0, 60)}" → ${headingText(e, b.id) ?? "(no heading)"}`).join("; ");
+    return r(`lands under ${c.lands}: ${c.contains.join(", ")}`, !!hit, hit ? "" : `got: ${where || "nothing settled"}`);
+  }
+  if ("tangent" in c) {
+    const hit = blocks.find((b) => b.tab === "tangent" && has(b.text, c.tangent));
+    return r(`tangent: ${c.tangent.join(", ")}`, !!hit, hit ? "" : "not kept as a tangent");
+  }
+  if ("next" in c) {
+    let inNext = false;
+    const hit = blocks.find((b) => {
+      if (b.kind === "heading") inNext = NEXT_RE.test(b.text);
+      return inNext && b.kind !== "heading" && has(b.text, c.next);
+    });
+    return r(`next: ${c.next.join(", ")}`, !!hit, hit ? "" : "not on the Next list");
+  }
+  if ("revised" in c) {
+    const hit = blocks.find((b) => has(b.text, c.revised) && (b.trail ?? []).some((t) => has(t, c.trail)));
+    return r(`revised to ${c.revised.join(", ")} (trail: ${c.trail.join(", ")})`, !!hit, hit ? "" : "no block revised with the old version in its trail");
+  }
+  if ("heading" in c) {
+    const hit = blocks.some((b) => b.kind === "heading" && hmatch(b.text, c.heading));
+    return r(`heading "${c.heading}"`, hit, hit ? "" : `headings: ${blocks.filter((b) => b.kind === "heading").map((b) => b.text).join(", ")}`);
+  }
+  if ("headings" in c) {
+    const n = blocks.filter((b) => b.kind === "heading" && !NEXT_RE.test(b.text)).length;
+    return r(`${c.headings} heading(s)`, n === c.headings, `found ${n}`);
+  }
+  if ("absent" in c) {
+    const found = c.absent.filter((p) => lc(pageText).includes(lc(p)));
+    return r(`absent: ${c.absent.join(" | ")}`, !found.length, found.length ? `found: ${found.join(", ")}` : "");
+  }
+  if ("order" in c) {
+    const hs = blocks.filter((b) => b.kind === "heading").map((b) => lc(b.text));
+    const idx = c.order.map((w) => hs.findIndex((h) => h.includes(lc(w))));
+    const ok = idx.every((i) => i >= 0) && idx.every((v, i) => i === 0 || v > idx[i - 1]);
+    return r(`order: ${c.order.join(" → ")}`, ok, ok ? "" : `headings: ${hs.join(", ")}`);
+  }
+  if ("title" in c) {
+    const ok = c.title.some((w) => lc(e.state.title).includes(lc(w)));
+    return r(`title mentions ${c.title.join("/")}`, ok, `title: "${e.state.title}"`);
+  }
+  void source;
+  return r("unknown check", false, "");
+}
+
+function toMarkdown(e: DocEngine): string {
+  const out: string[] = [`# ${e.state.title || "Untitled"}`, ""];
+  for (const b of e.state.blocks) {
+    const tab = b.tab === "tangent" ? " ⟶ [TANGENT · LATER]" : "";
+    const trail = b.trail?.length ? `  _(earlier: ${b.trail.join(" | ")})_` : "";
+    const wet = b.wet ? " [WET]" : "";
+    if (b.kind === "heading") out.push("", `## ${b.text}`);
+    else if (b.kind === "bullet") out.push(`- ${b.text}${trail}${tab}${wet}`);
+    else if (b.kind === "question") out.push(`> ? ${b.text}${trail}${tab}${wet}`);
+    else out.push(`${b.text}${trail}${tab}${wet}`);
+  }
+  return out.join("\n") + "\n";
+}
+
+async function run() {
+  const outDir = path.join("evals", "out", route.replace(/[^a-z0-9.-]/gi, "_"));
+  mkdirSync(outDir, { recursive: true });
+  console.log(`Settle eval · route: ${route}\n`);
+  const all: CheckResult[] = [];
+  const latencies: number[] = [];
+  let novelty = 0;
+  let placed = 0;
+  let scribeViolations = 0;
+  const perScenario: { id: string; passed: number; total: number; gaps: number }[] = [];
+
+  for (const s of SCENARIOS.filter((x) => !only || x.id.includes(only))) {
+    const e = seed(s);
+    let current: string | null = null;
+    let lastPlaced: string | null = null;
+    const recent: string[] = [];
+    const results: CheckResult[] = [];
+    console.log(`▸ ${s.name}`);
+
+    for (const [ti, turn] of s.turns.entries()) {
+      const before = new Set(e.state.blocks.filter((b) => b.kind === "heading").map((b) => lc(b.text)));
+      const text = (turn.say ?? turn.type)!;
+      const id = newId("w");
+      let after = anchor(e, current);
+      if (turn.type && turn.under) {
+        const h = e.state.blocks.find((b) => b.kind === "heading" && hmatch(b.text, turn.under!));
+        after = anchor(e, h?.id ?? null);
+      }
+      e.commit({
+        id: newId("tx"),
+        actor: turn.say ? "voice" : "user",
+        label: "input",
+        ops: [{ t: "insert", block: { id, kind: "paragraph", text, wet: true, rev: 0, origin: turn.say ? "voice" : "typed" }, after }],
+      });
+      const req = buildRequest(e.snapshot(), [id], { currentHeadingId: current, recent });
+      const res = await orch.settle(req);
+      latencies.push(res.latencyMs);
+      const comp = compilePlan(e.state, req, res.plan);
+      const commit = e.commit({ id: newId("tx"), actor: "phlo", label: "Settle", ops: comp.ops });
+      const touched = [...comp.settledIds, ...res.plan.revisions.map((r) => r.block_id)];
+      if (!commit.ok) console.log(`   turn ${ti + 1}: commit conflict ${JSON.stringify(commit.conflicts)}`);
+
+      for (const sid of comp.settledIds) {
+        const b = e.block(sid);
+        if (!b) continue;
+        placed++;
+        const nv = noveltyRatio(b.text, text);
+        novelty += nv;
+        if (s.role === "scribe" && nv > 0.2) scribeViolations++;
+      }
+      // Follow the speaker like the app does: the section the last idea landed in.
+      lastPlaced = comp.settledIds.filter((x) => e.block(x)?.tab !== "tangent").at(-1) ?? lastPlaced;
+      if (lastPlaced) current = headingOf(e.state.blocks, lastPlaced) ?? current;
+      recent.unshift(...comp.settledIds.slice().reverse());
+
+      for (const c of turn.expect) {
+        const g = grade(e, c, touched, text, before, ti + 1);
+        results.push(g);
+        const mark = g.pass ? "✓" : g.gap ? "◌" : "✗";
+        console.log(`   ${mark} t${ti + 1} ${g.check}${g.pass ? "" : `  — ${g.note}`}${g.gap && !g.pass ? " (known gap)" : ""}`);
+      }
+      console.log(`     ${res.route} ${res.latencyMs}ms${res.note ? ` (${res.note})` : ""}`);
+    }
+    const scored = results.filter((r) => !r.gap);
+    perScenario.push({ id: s.id, passed: scored.filter((r) => r.pass).length, total: scored.length, gaps: results.filter((r) => r.gap && !r.pass).length });
+    writeFileSync(path.join(outDir, `${s.id}.md`), toMarkdown(e));
+    all.push(...results);
+    console.log("");
+  }
+
+  latencies.sort((a, b) => a - b);
+  const pct = (p: number) => latencies[Math.min(latencies.length - 1, Math.floor(p * latencies.length))] ?? 0;
+  const scored = all.filter((r) => !r.gap);
+  const passed = scored.filter((r) => r.pass).length;
+  const wrongTarget = scored.filter((r) => !r.pass && r.check.startsWith("lands")).length;
+  const transcribed = scored.filter((r) => !r.pass && r.check.startsWith("absent")).length;
+  const summary = {
+    route,
+    checks: { passed, total: scored.length, rate: +(passed / Math.max(1, scored.length)).toFixed(3) },
+    knownGaps: all.filter((r) => r.gap && !r.pass).length,
+    wrongTargetPlacements: wrongTarget,
+    instructionsTranscribed: transcribed,
+    meanNovelty: +(novelty / Math.max(1, placed)).toFixed(3),
+    scribeViolations,
+    latencyMs: { p50: pct(0.5), p95: pct(0.95), max: latencies.at(-1) ?? 0 },
+    scenarios: perScenario,
+  };
+  writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ summary, results: all }, null, 2));
+  console.log("Scenario".padEnd(22), "Pass");
+  for (const p of perScenario) console.log(p.id.padEnd(22), `${p.passed}/${p.total}${p.gaps ? `  (+${p.gaps} known gap${p.gaps > 1 ? "s" : ""})` : ""}`);
+  console.log(`\nchecks ${passed}/${scored.length} (${Math.round(summary.checks.rate * 100)}%) · wrong-target ${wrongTarget} · instructions transcribed ${transcribed} · scribe violations ${scribeViolations} · mean novelty ${summary.meanNovelty} · p50 ${summary.latencyMs.p50}ms p95 ${summary.latencyMs.p95}ms`);
+  console.log(`pages: ${outDir}/*.md`);
+}
+
+void run();

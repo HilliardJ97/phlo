@@ -3,3 +3,4 @@ dist
 .phlo-data
 *.log
 .DS_Store
+evals/out
