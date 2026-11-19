@@ -251,7 +251,7 @@ A separate process beside the settle path, inspired by Meta's Muse: it surfaces 
 - **Utterances, sources, provenance and memory are relational** by nature.
 - **WAL gives atomic multi-table commits** and crash safety without our own fsync dance.
 
-**One database file per draft** (`draft.sqlite`): blocks, journal, utterances, sources, provenance, cards, jobs, memory, plus an FTS5 table. Audio segments live beside it.
+**One database file for all drafts** (`phlo.db`, built-in `node:sqlite`, so no native rebuilds in Electron): drafts, journal (with author and inverse), and an FTS5 index; utterances, sources, provenance, cards, jobs and memory arrive as append-only migrations in the steps that need them. One file lets memory and Recall reach across drafts. Audio segments live beside it.
 
 **Migration:** on first open, import the existing JSON snapshot and journal, then keep writing a JSON export on Publish, for portability.
 

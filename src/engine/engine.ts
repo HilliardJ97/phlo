@@ -13,7 +13,16 @@
  */
 import type { Block, Card, Draft, Reference, Role, TranscriptSegment } from "./model";
 
-export type Actor = "user" | "voice" | "phlo" | "system";
+export type Actor = "user" | "voice" | "phlo" | "gardener" | "verb" | "system";
+
+/** Who a change belongs to, for per-author undo. Typing and speech are both "you". */
+export type Author = "you" | "phlo" | "gardener" | "verb" | "system";
+
+export function authorOf(actor: string): Author {
+  if (actor === "user" || actor === "voice") return "you";
+  if (actor === "phlo" || actor === "gardener" || actor === "verb") return actor;
+  return "system";
+}
 
 type BlockPatch = Partial<Omit<Block, "id" | "rev">>;
 type MetaPatch = Partial<Pick<Draft, "title" | "titleAuto" | "role">>;
@@ -223,6 +232,17 @@ export class DocEngine {
       this.redoStack.push({ ...target, inverse: res.tx.inverse, touched: res.tx.touched });
     }
     return res;
+  }
+
+  /**
+   * Undo the most recent change by one author ("undo what Phlo just did")
+   * without touching anyone else's later work.
+   */
+  undoLastBy(author: Author): CommitResult | null {
+    for (let i = this.undoStack.length - 1; i >= 0; i--) {
+      if (authorOf(this.undoStack[i].actor) === author) return this.undo(this.undoStack[i].id);
+    }
+    return null;
   }
 
   redo(): CommitResult | null {
