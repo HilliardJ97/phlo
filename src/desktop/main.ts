@@ -78,6 +78,8 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on("before-quit", () => api?.dispose());
+
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });

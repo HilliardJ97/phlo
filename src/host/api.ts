@@ -10,7 +10,7 @@ import { newId } from "../engine/ids";
 import { COVER_PAIRINGS, emptyDraft, type Draft, type PublishedPiece } from "../engine/model";
 import type { SettleRequest, SettleResponse } from "../engine/settle";
 import { ClaudeProvider, DEFAULT_MODEL } from "./ai/claude";
-import { CodexProvider } from "./ai/codex";
+import { CodexWarmProvider } from "./ai/codexWarm";
 import { CompatProvider } from "./ai/compat";
 import type { SettleProvider } from "./ai/provider";
 import { Orchestrator } from "./ai/orchestrator";
@@ -63,6 +63,12 @@ export class HostApi {
   readonly orchestrator: Orchestrator;
   private settings: Settings = DEFAULT_SETTINGS;
   private memKeys: { claude?: string; openai?: string; compat?: string } = {};
+  private warm: CodexWarmProvider | null = null;
+
+  /** Stop background model processes (the warm Codex app-server). */
+  dispose() {
+    this.warm?.dispose();
+  }
 
   constructor(
     dataDir: string,
@@ -84,12 +90,14 @@ export class HostApi {
   private applyProvider() {
     const s = this.settings;
     let p: SettleProvider | null = null;
-    if (s.provider === "chatgpt") p = new CodexProvider(s.chatgptModel || "", "low");
+    this.warm?.dispose();
+    this.warm = null;
+    if (s.provider === "chatgpt") p = this.warm = new CodexWarmProvider(s.chatgptModel || "", "low");
     else if (s.provider === "claude") p = new ClaudeProvider(() => this.claudeKey(), s.model || DEFAULT_MODEL);
     else if (s.provider === "compat") p = new CompatProvider({ baseUrl: s.compatBaseUrl, model: s.compatModel, apiKey: this.compatKey(), mode: s.compatMode });
     // A process per Codex call is slower than an API: give it more room before falling back.
     // Codex starts a process per call and local models prefill on your Mac: give both more room.
-    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 20_000 : s.provider === "compat" ? 15_000 : 9000);
+    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 15_000 : s.provider === "compat" ? 15_000 : 9000);
   }
 
   private compatKey(): string | undefined {

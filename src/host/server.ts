@@ -81,6 +81,7 @@ export async function startServer(opts: { port?: number; dataDir?: string } = {}
   });
 
   await new Promise<void>((resolve) => server.listen(port, "127.0.0.1", resolve));
+  for (const sig of ["SIGINT", "SIGTERM"] as const) process.once(sig, () => (api.dispose(), process.exit(0)));
   return { server, api, url: origin, token };
 }
 

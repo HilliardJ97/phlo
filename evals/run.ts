@@ -23,7 +23,7 @@ import { newId } from "../src/engine/ids";
 import { emptyDraft, type Block } from "../src/engine/model";
 import { buildRequest, compilePlan, headingOf, noveltyRatio, NEXT_RE } from "../src/engine/settle";
 import { ClaudeProvider } from "../src/host/ai/claude";
-import { CodexProvider } from "../src/host/ai/codex";
+import { CodexWarmProvider } from "../src/host/ai/codexWarm";
 import { CompatProvider } from "../src/host/ai/compat";
 import type { SettleProvider } from "../src/host/ai/provider";
 import { Orchestrator } from "../src/host/ai/orchestrator";
@@ -48,7 +48,7 @@ function pick(): SettleProvider | null {
     });
   }
   if (want === "claude" || (want === "auto" && key)) return key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
-  const codex = new CodexProvider(process.env.PHLO_MODEL || "", (process.env.PHLO_REASONING as "minimal" | "low" | "medium") || "low");
+  const codex = new CodexWarmProvider(process.env.PHLO_MODEL || "", (process.env.PHLO_REASONING as "minimal" | "low" | "medium") || "low");
   return codex.available() ? codex : null;
 }
 const provider = pick();
@@ -276,6 +276,7 @@ async function run() {
   for (const p of perScenario) console.log(p.id.padEnd(22), `${p.passed}/${p.total}${p.gaps ? `  (+${p.gaps} known gap${p.gaps > 1 ? "s" : ""})` : ""}`);
   console.log(`\nchecks ${passed}/${scored.length} (${Math.round(summary.checks.rate * 100)}%) · wrong-target ${wrongTarget} · instructions transcribed ${transcribed} · scribe violations ${scribeViolations} · mean novelty ${summary.meanNovelty} · p50 ${summary.latencyMs.p50}ms p95 ${summary.latencyMs.p95}ms`);
   console.log(`pages: ${outDir}/*.md`);
+  (provider as { dispose?: () => void } | null)?.dispose?.();
 }
 
 void run();
