@@ -178,6 +178,8 @@ export function cleanSpeech(text: string): string {
   t = t.replace(/\b(\w+)(\s+\1\b)+/gi, "$1");
   t = t.replace(/\s+([,.!?;:])/g, "$1").replace(/\s{2,}/g, " ").trim();
   t = t.replace(/^[,;:\s]+/, "");
+  // Spoken openers carry no meaning: "so", "okay so", "and so", "well".
+  t = t.replace(/^(?:(?:ok(?:ay)?|so|and|well|right|alright)[,\s]+)+(?=\w)/i, "");
   if (!t) return t;
   t = t[0].toUpperCase() + t.slice(1);
   return t;

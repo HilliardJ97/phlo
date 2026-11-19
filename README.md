@@ -25,16 +25,23 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 
 | Do | How |
 | --- | --- |
-| Talk | Hold **Space** (when the caret isn't in text), or **⌥Space** anywhere. Tap to toggle. Or click the dot. |
+| Talk | Hold **Space** to talk, release to stop. **Tap Space twice** to lock it on (tap again to stop). Space talks when the caret isn't in text, on an empty draft, or with **⌥Space** anywhere. Or click the dot. |
 | Type | Just type. New lines stay wet (light gray) until you finish the paragraph (**Enter twice**) or move away. **⌘↵** settles now. |
 | Structure by hand | `# ` heading · `- ` bullet · `? ` open question · Tab / ⇧Tab for list depth |
-| Change your mind | Say "scratch that, …". The old version folds into a faint trail (hover to see it). |
+| Change your mind | Say "scratch that, …". The old version folds into an `EARLIER:` trail. Nothing is deleted. |
 | Direct it | "new section pricing: …", "under risks: …" are handled instantly, on-device. |
-| References | Paste a link or a screenshot. It goes to References, not into the page. |
-| Partner / Scribe | Partner helps you think. Scribe organizes only your words and turns on Room view. |
-| Room view | ⌘⇧R. Large type, no chrome. Esc to leave. |
-| Publish | Appears once a draft has 3 sections with substance. |
+| Tangents | "oh also, …" becomes a `TANGENT · LATER` tab in the margin. Click it to bring it into the section you're in. |
+| Action items | "talk to 5 couples" goes to the **Next** list at the end. |
+| References | ⌘V a link or a screenshot. It goes to References in the sidebar, not into the page. |
+| Partner / Scribe | Partner helps you think (tabs, one `PHLO ASKS` question after ~8s of locked-on silence). Scribe organizes only your words and opens Room view. |
+| Room view | ⌘⇧R or ··· → Room view. Sumi, large type, no chrome. Esc to leave. |
+| Transcript | ··· → Transcript, with time codes. |
+| Publish | A ghost button until the draft has 3 sections with content, then solid. |
 | Undo | ⌘Z undoes the last change, including a settle, without touching what you typed elsewhere. |
+
+## Acceptance checks
+
+`e2e/acceptance.cjs` runs CORE_SCREEN_SPEC section 5 against the running app (`npm run web`, then `NODE_PATH=$(npm root -g) node e2e/acceptance.cjs`). All 9 pass; checks 3–5 are covered by unit tests, and check 1 is verified up to the microphone prompt.
 
 ## Architecture
 
@@ -73,6 +80,6 @@ src/engine/    model, transactions, settle plan + compiler, local rules (pure TS
 src/host/      HostApi, orchestrator + Claude provider, store, loopback server
 src/desktop/   Electron main + preload
 src/renderer/  editor, voice, UI, styles (tokens from the design system)
-docs/design/   Phlo design system (tokens, brand, components)
+docs/design/   phlo-handoff/ (spec, screens, tokens, brand: the source of truth) and phlo-system/ (earlier export)
 tests/ evals/  unit + benchmark tests, live quality eval
 ```

@@ -121,7 +121,8 @@ describe("settle", () => {
   }
 
   it("cleans fillers and repetition", () => {
-    expect(cleanSpeech("um so the the price is, you know, too high")).toBe("So the price is, too high");
+    expect(cleanSpeech("um so the the price is, you know, too high")).toBe("The price is, too high");
+    expect(cleanSpeech("okay so we charge per seat")).toBe("We charge per seat");
   });
 
   it("local route places speech under the matching heading", () => {

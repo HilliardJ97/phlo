@@ -499,6 +499,12 @@ class Settler {
         ops.push({ t: "delete", id: b.id, expectRev: b.rev });
       }
     }
+    // The empty line you're on follows what just settled, so your next words land after it.
+    const caret = caretBlock ? engine.block(caretBlock) : null;
+    const lastPlaced = compiled.settledIds.filter((id) => engine.block(id)?.tab !== "tangent").at(-1);
+    if (caret && caret.wet && !caret.text.trim() && lastPlaced && lastPlaced !== caret.id && !req.wet.some((w) => w.id === caret.id)) {
+      ops.push({ t: "move", id: caret.id, after: lastPlaced });
+    }
     const out = engine.commit({ id: newId("tx"), actor: "phlo", label: "Settle", ops });
     if (!out.ok) {
       if (++this.conflicts < 4) this.again = true;
@@ -511,6 +517,7 @@ class Settler {
     if (placed && talking) currentHeading = headingOf(engine.state.blocks, placed) ?? currentHeading;
     if (compiled.question && engine.state.role === "partner" && talking) showAsk(compiled.question);
     render(compiled.settledIds);
+    if (caret && document.activeElement === docEl && engine.block(caret.id)) editor.setCaret(caret.id, 0);
     if (hintEl.isConnected && !engine.state.blocks.some((b) => b.wet && b.origin === "typed" && b.text.trim())) hintEl.remove();
     $("stats-meta").textContent = `${res.route === "model" ? "Claude" : res.route === "fallback" ? "Local fallback" : "Local"} · ${(res.latencyMs / 1000).toFixed(1)}s`.toUpperCase();
   }
@@ -577,6 +584,13 @@ function addSpeech(text: string) {
   const ops: Op[] = [{ t: "transcript", segment: { id: segId, at: Date.now(), text: clean } }];
   const visible = blocks.filter(inPage);
   const starter = visible.length === 1 && !visible[0].text ? visible[0] : null;
+  // Talking takes your hands off the keyboard: a caret resting on an empty line lets go,
+  // so spoken words there can settle.
+  const resting = caretBlock ? engine.block(caretBlock) : null;
+  if (resting && !resting.text.trim()) {
+    docEl.blur();
+    caretBlock = null;
+  }
   let id: string;
   if (starter) {
     id = starter.id;
