@@ -173,3 +173,49 @@ describe("benchmark: evidence changes the recommendation while you type elsewher
     expect(res.plan.placements[0].text.toLowerCase()).toContain("second study changes it");
   });
 });
+
+describe("provider chain: your plan, then a backup cloud model, then local", () => {
+  class Failing implements SettleProvider {
+    readonly name = "chatgpt";
+    readonly model = "plan";
+    calls = 0;
+    constructor(private code: string) {}
+    available() {
+      return true;
+    }
+    async ask() {
+      return null;
+    }
+    async settle(): Promise<SettlePlan> {
+      this.calls++;
+      throw Object.assign(new Error("nope"), { code: this.code });
+    }
+  }
+
+  it("falls to the backup when the plan is signed out, and stops asking the plan for a while", async () => {
+    const e = setup();
+    const primary = new Failing("SIGNED_OUT");
+    const backup = new ScriptedProvider(10, changeRecommendation);
+    const orch = new Orchestrator(null, { deadlineMs: 5000 });
+    orch.setProviders([primary, backup]);
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h_rec", recent: ["rec"] });
+    const r1 = await orch.settle(req);
+    expect(r1.route).toBe("model");
+    expect(r1.model).toBe("scripted · scripted");
+    expect(r1.note).toContain("chatgpt");
+    await orch.settle({ ...req, requestId: "again" });
+    expect(primary.calls).toBe(1); // cooling down: not retried on every settle
+    expect(backup.calls).toBe(2);
+  });
+
+  it("everything failing still settles locally and keeps the words", async () => {
+    const e = setup();
+    const orch = new Orchestrator(null, { deadlineMs: 5000 });
+    orch.setProviders([new Failing("USAGE_LIMIT"), new Failing("FAILED")]);
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h_rec", recent: ["rec"] });
+    const r = await orch.settle(req);
+    expect(r.route).toBe("fallback");
+    expect(e.commit({ id: "s", actor: "phlo", label: "Settle", ops: compilePlan(e.state, req, r.plan).ops }).ok).toBe(true);
+    expect(orch.status().coolingUntil).not.toBeNull(); // the plan at its limit is skipped for a while
+  });
+});

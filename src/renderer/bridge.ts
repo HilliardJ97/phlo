@@ -18,7 +18,7 @@ export interface HostSettings {
   compatBaseUrl: string;
   compatModel: string;
   compatMode: "route" | "full";
-  ai: { provider: string; model: string | null; deadlineMs: number; coolingUntil: number | null; callsLast5h: number };
+  ai: { provider: string; model: string | null; backup: string | null; deadlineMs: number; coolingUntil: number | null; callsLast5h: number };
 }
 
 export class HostError extends Error {

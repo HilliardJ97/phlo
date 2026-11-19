@@ -390,3 +390,9 @@ body.room .tbl { font: var(--room-body); }
 .form-row .fname { font: var(--text-small); color: var(--ink); white-space: nowrap; }
 .form-row .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .form-row[aria-selected="true"], .form-row:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+
+dialog.settings .row-head { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 0 8px; }
+dialog.settings .linkish { color: var(--cobalt); }
+dialog.settings .linkish:hover { text-decoration: underline; text-underline-offset: 3px; }
+dialog.settings #compat-fields { border-top: 1px solid var(--hairline); padding-top: 16px; margin: 4px 0 20px; }
+dialog.settings { max-height: calc(100vh - 48px); overflow-y: auto; }

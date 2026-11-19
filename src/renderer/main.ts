@@ -113,13 +113,17 @@ app.innerHTML = `
       <label class="label">Settle with<select name="provider"><option value="chatgpt">ChatGPT · your plan, through Codex</option><option value="claude">Claude · API key</option><option value="compat">Open model · Ollama, LM Studio, OpenRouter…</option><option value="local">On this Mac only · fast rules</option></select></label>
       <p class="note" id="provider-note"></p>
       <div id="compat-fields">
+        <div class="row-head"><span class="label" id="compat-title">Backup cloud model</span><button type="button" class="label linkish" id="use-openrouter">Use OpenRouter · GPT-6 Luna</button></div>
+        <p class="note" id="compat-note">Used when your plan is signed out or at its limit. Any OpenAI-compatible service: OpenRouter, Groq, Together, or Ollama on this Mac.</p>
         <label class="label">Endpoint<input name="compatBaseUrl" autocomplete="off" placeholder="http://127.0.0.1:11434/v1" /></label>
         <label class="label">Model<input name="compatModel" autocomplete="off" placeholder="qwen3:8b" /></label>
         <label class="label">Model does<select name="compatMode"><option value="route">Placement only · fastest (Phlo cleans the words)</option><option value="full">Placement and wording</option></select></label>
         <label class="label">Key (hosted endpoints only)<input type="password" name="compatKey" autocomplete="off" placeholder="Leave empty for a model on this Mac" /></label>
       </div>
+      <div id="claude-fields">
       <label class="label">Claude key<input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-…" /></label>
       <p class="note" id="claude-note"></p>
+      </div>
       <label class="label">Transcription key (OpenAI)<input type="password" name="openaiKey" autocomplete="off" placeholder="sk-…" /></label>
       <p class="note" id="openai-note"></p>
       <label class="label">Theme<select name="theme"><option value="system">System</option><option value="paper">Paper</option><option value="sumi">Sumi</option></select></label>
@@ -543,10 +547,17 @@ class Settler {
     }
     if (caret && document.activeElement === docEl && engine.block(caret.id)) editor.setCaret(caret.id, 0);
     if (hintEl.isConnected && !engine.state.blocks.some((b) => b.wet && b.origin === "typed" && b.text.trim())) hintEl.remove();
-    $("stats-meta").textContent = `${res.route === "model" ? "Claude" : res.route === "fallback" ? "Local fallback" : "Local"} · ${(res.latencyMs / 1000).toFixed(1)}s`.toUpperCase();
+    $("stats-meta").textContent = `${res.route === "model" ? (res.model ?? "Model") : res.route === "fallback" ? "Local fallback" : "Local"} · ${(res.latencyMs / 1000).toFixed(1)}s`.toUpperCase();
+    // Say once when your plan isn't answering, and what's covering for it.
+    if (res.note && !routeNoticeShown && /chatgpt|codex/i.test(res.note)) {
+      routeNoticeShown = true;
+      const via = res.route === "model" ? `your backup model (${res.model})` : "fast local rules";
+      toast(`ChatGPT isn't answering, so Phlo is using ${via}.`, { label: "Your AI", run: () => void openSettings() }, 7000);
+    }
   }
 }
 const settler = new Settler();
+let routeNoticeShown = false;
 
 function setSettling(on: boolean) {
   voiceBtn.classList.toggle("settling", on && !talking);
@@ -1100,7 +1111,19 @@ async function openSettings() {
   (f.elements.namedItem("compatModel") as HTMLInputElement).value = settings.compatModel;
   (f.elements.namedItem("compatMode") as HTMLSelectElement).value = settings.compatMode;
   (f.elements.namedItem("compatKey") as HTMLInputElement).value = "";
-  const showCompat = () => ($("compat-fields").style.display = (f.elements.namedItem("provider") as HTMLSelectElement).value === "compat" ? "block" : "none");
+  const showCompat = () => {
+    const v = (f.elements.namedItem("provider") as HTMLSelectElement).value;
+    $("compat-fields").style.display = v === "local" ? "none" : "block";
+    $("compat-title").textContent = v === "compat" ? "Open model" : "Backup cloud model";
+    $("compat-note").style.display = v === "compat" ? "none" : "block";
+    $("claude-fields").style.display = v === "claude" ? "block" : "none";
+  };
+  $("use-openrouter").onclick = () => {
+    (f.elements.namedItem("compatBaseUrl") as HTMLInputElement).value = "https://openrouter.ai/api/v1";
+    (f.elements.namedItem("compatModel") as HTMLInputElement).value = "openai/gpt-6-luna";
+    (f.elements.namedItem("compatMode") as HTMLSelectElement).value = "full";
+    (f.elements.namedItem("compatKey") as HTMLInputElement).focus();
+  };
   (f.elements.namedItem("provider") as HTMLSelectElement).onchange = showCompat;
   showCompat();
   const ai = settings.ai;
@@ -1230,4 +1253,11 @@ window.phlo = {
   settings = await host.getSettings().catch(() => null);
   applyTheme();
   await openDraft();
+  // Say once which brain is settling when it isn't the one you chose.
+  if (settings && settings.provider !== "local" && settings.ai.provider === "local" && !routeNoticeShown) {
+    routeNoticeShown = true;
+    const what = settings.provider === "chatgpt" ? "ChatGPT isn't connected yet" : "Your model isn't connected";
+    const via = settings.ai.backup ? `your backup model` : "fast local rules";
+    setTimeout(() => toast(`${what}. Phlo is settling with ${via}.`, { label: "Your AI", run: () => void openSettings() }, 8000), 600);
+  }
 })();

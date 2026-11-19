@@ -37,32 +37,49 @@ export class Orchestrator {
   private inflight = new Map<string, AbortController>();
   private traces: TraceEntry[] = [];
   private deadlineMs: number;
-  /** After a plan-limit error, settle locally until this time instead of failing every call. */
-  private coolUntil = 0;
+  /** Ordered: your plan's model, then a backup cloud model. Local rules are always the floor. */
+  private chain: SettleProvider[] = [];
+  /** Per-provider cool-down after errors a retry won't fix (signed out, plan limit, no credit). */
+  private coolUntil = new Map<SettleProvider, number>();
   private calls: number[] = [];
 
-  constructor(
-    private provider: SettleProvider | null,
-    opts: OrchestratorOptions = {},
-  ) {
+  constructor(provider: SettleProvider | null, opts: OrchestratorOptions = {}) {
     this.deadlineMs = opts.deadlineMs ?? 9000;
+    this.chain = provider ? [provider] : [];
   }
 
   setProvider(p: SettleProvider | null, deadlineMs?: number) {
-    this.provider = p;
-    if (deadlineMs) this.deadlineMs = deadlineMs;
-    this.coolUntil = 0;
+    this.setProviders(p ? [p] : [], deadlineMs);
   }
 
-  private modelReady(): boolean {
-    return !!this.provider?.available() && Date.now() >= this.coolUntil;
+  setProviders(list: SettleProvider[], deadlineMs?: number) {
+    this.chain = list;
+    if (deadlineMs) this.deadlineMs = deadlineMs;
+    this.coolUntil.clear();
+  }
+
+  private ready(): SettleProvider[] {
+    const now = Date.now();
+    return this.chain.filter((p) => (this.coolUntil.get(p) ?? 0) <= now && p.available());
+  }
+
+  private cool(p: SettleProvider, err: unknown) {
+    const code = (err as { code?: string })?.code;
+    const msg = err instanceof Error ? err.message : String(err);
+    const minutes =
+      code === "USAGE_LIMIT" || / 429| 402/.test(msg) ? 30 : code === "SIGNED_OUT" || code === "NOT_INSTALLED" || / 401| 403/.test(msg) ? 5 : 0;
+    if (minutes) this.coolUntil.set(p, Date.now() + minutes * 60_000);
   }
 
   status() {
+    const ready = this.ready();
+    const primary = this.chain[0];
+    const primaryCooling = primary ? (this.coolUntil.get(primary) ?? 0) : 0;
     return {
-      provider: this.modelReady() ? this.provider!.name : "local",
-      model: this.modelReady() ? this.provider!.model || "default" : null,
-      coolingUntil: this.coolUntil > Date.now() ? this.coolUntil : null,
+      provider: ready[0]?.name ?? "local",
+      model: ready[0] ? ready[0].model || "default" : null,
+      backup: this.chain[1] ? `${this.chain[1].name}${this.chain[1].model ? ` · ${this.chain[1].model}` : ""}` : null,
+      coolingUntil: primaryCooling > Date.now() ? primaryCooling : null,
       /** Model calls in the last 5 hours: the ChatGPT plan's usage window. */
       callsLast5h: this.calls.filter((t) => Date.now() - t < 5 * 3600_000).length,
       deadlineMs: this.deadlineMs,
@@ -94,24 +111,35 @@ export class Orchestrator {
     const local = () => localPlan(req) ?? { title: null, new_headings: [], placements: [], revisions: [], consumed: [], structure: [], question: null };
 
     if (!req.wet.length) return finish(local(), "local");
-
     const allCommands = req.wet.every((w) => isExplicitCommand(w.text));
-    if (allCommands || !this.modelReady()) return finish(local(), "local");
-    this.calls.push(Date.now());
-    if (this.calls.length > 2000) this.calls.splice(0, 1000);
+    const ready = this.ready();
+    if (allCommands || !ready.length) return finish(local(), "local");
 
     const timer = setTimeout(() => ctrl.abort("deadline"), this.deadlineMs);
+    const notes: string[] = [];
     try {
-      const plan = await this.provider!.settle(req, { signal: ctrl.signal });
-      return finish(plan, "model", this.provider!.model);
+      for (const p of ready) {
+        // Don't start a backup with too little time left to finish.
+        if (p !== ready[0] && this.deadlineMs - (performance.now() - started) < 2500) break;
+        this.calls.push(Date.now());
+        if (this.calls.length > 2000) this.calls.splice(0, 1000);
+        try {
+          const plan = await p.settle(req, { signal: ctrl.signal });
+          return finish(plan, "model", `${p.name}${p.model ? ` · ${p.model}` : ""}`, notes.length ? notes.join("; ") : undefined);
+        } catch (err) {
+          if (ctrl.signal.aborted) throw err;
+          this.cool(p, err);
+          notes.push(`${p.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      return finish(local(), "fallback", undefined, notes.join("; "));
     } catch (err) {
       const reason = ctrl.signal.aborted ? String(ctrl.signal.reason) : err instanceof Error ? err.message : String(err);
       if (reason === "superseded") {
         this.trace({ requestId: req.requestId, draftId: req.draftId, at: Date.now(), route: "superseded", latencyMs: Math.round(performance.now() - started), wetCount: req.wet.length });
         throw new SupersededError();
       }
-      if ((err as { code?: string })?.code === "USAGE_LIMIT") this.coolUntil = Date.now() + 30 * 60_000;
-      return finish(local(), "fallback", undefined, reason);
+      return finish(local(), "fallback", undefined, [...notes, reason].join("; "));
     } finally {
       clearTimeout(timer);
     }
@@ -119,12 +147,13 @@ export class Orchestrator {
 
   /** Partner's stall question. Model only; returns null when unavailable or slow. */
   async ask(req: AskRequest): Promise<{ question: string | null }> {
-    if (!this.modelReady()) return { question: null };
+    const p = this.ready()[0];
+    if (!p) return { question: null };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort("deadline"), 8000);
     try {
       this.calls.push(Date.now());
-      return { question: await this.provider!.ask(req, { signal: ctrl.signal }) };
+      return { question: await p.ask(req, { signal: ctrl.signal }) };
     } catch {
       return { question: null };
     } finally {

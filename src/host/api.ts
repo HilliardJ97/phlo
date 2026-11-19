@@ -96,8 +96,12 @@ export class HostApi {
     else if (s.provider === "claude") p = new ClaudeProvider(() => this.claudeKey(), s.model || DEFAULT_MODEL);
     else if (s.provider === "compat") p = new CompatProvider({ baseUrl: s.compatBaseUrl, model: s.compatModel, apiKey: this.compatKey(), mode: s.compatMode });
     // A process per Codex call is slower than an API: give it more room before falling back.
-    // Codex starts a process per call and local models prefill on your Mac: give both more room.
-    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 15_000 : s.provider === "compat" ? 15_000 : 9000);
+    // Backup cloud model: any configured OpenAI-compatible model (OpenRouter by default) behind the primary.
+    const chain = p ? [p] : [];
+    if (s.provider !== "compat" && s.provider !== "local" && s.compatModel && s.compatBaseUrl) {
+      chain.push(new CompatProvider({ baseUrl: s.compatBaseUrl, model: s.compatModel, apiKey: this.compatKey(), mode: s.compatMode }));
+    }
+    this.orchestrator.setProviders(chain, s.provider === "chatgpt" || s.provider === "compat" ? 15_000 : 9000);
   }
 
   private compatKey(): string | undefined {
