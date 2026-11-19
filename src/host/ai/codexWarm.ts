@@ -70,6 +70,11 @@ export class CodexWarmProvider implements SettleProvider {
     return out.question?.trim() || null;
   }
 
+  /** Start the app-server and handshake now, so the first settle doesn't pay for it. */
+  warmup(): void {
+    if (!this.broken && this.available()) void this.start().catch(() => undefined);
+  }
+
   dispose() {
     this.proc?.kill();
     this.proc = null;

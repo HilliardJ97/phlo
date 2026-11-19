@@ -92,7 +92,11 @@ export class HostApi {
     let p: SettleProvider | null = null;
     this.warm?.dispose();
     this.warm = null;
-    if (s.provider === "chatgpt") p = this.warm = new CodexWarmProvider(s.chatgptModel || "", "low");
+    if (s.provider === "chatgpt") {
+      p = this.warm = new CodexWarmProvider(s.chatgptModel || "", "low");
+      // Pre-warm off the startup path: the first settle shouldn't pay for process start + handshake.
+      setTimeout(() => this.warm?.warmup(), 50);
+    }
     else if (s.provider === "claude") p = new ClaudeProvider(() => this.claudeKey(), s.model || DEFAULT_MODEL);
     else if (s.provider === "compat") p = new CompatProvider({ baseUrl: s.compatBaseUrl, model: s.compatModel, apiKey: this.compatKey(), mode: s.compatMode });
     // A process per Codex call is slower than an API: give it more room before falling back.

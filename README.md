@@ -6,6 +6,8 @@ Phlo turns thinking out loud into a clear page. You talk (or type messily) and t
 
 ## Run it
 
+**On a Mac:** double-click **Open Phlo.command** (opens Chrome at `http://127.0.0.1:8790`). For a guided 20-minute test, see [TESTING.md](TESTING.md).
+
 ```bash
 npm install
 npm run desktop      # the Mac/Windows/Linux app (Electron)
