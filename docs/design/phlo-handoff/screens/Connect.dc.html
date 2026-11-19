@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Connect and right-click</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&amp;family=Geist+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#f7f7f4}
+a{color:#16171a}a:hover{color:#66665f}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="font-family: Geist, 'Helvetica Neue', system-ui, sans-serif; background: #f7f7f4; color: #16171a; min-height: 900px; display: flex">
+<nav aria-label="Main" style="width: 64px; flex: 0 0 64px; border-right: 1px solid #e4e4df; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 20px; box-sizing: border-box; min-height: 900px">
+<a href="Sidebar.dc.html" aria-label="Open sidebar" style="display: flex; padding: 8px"><svg aria-hidden="true" width="20" height="22" viewBox="0 0 117 130"><path d="M50 0 A50 50 0 0 0 50 100 Z" fill="#e5432a"></path><path d="M57 0 H117 V130 L87 100 H57 Z" fill="#16171a"></path></svg></a>
+<button aria-label="New draft" style="width: 36px; height: 36px; border-radius: 999px; border: 1px solid #e4e4df; background: transparent; color: #66665f; font-size: 18px; line-height: 1; cursor: pointer">+</button>
+</nav>
+<main style="flex: 1 1 auto; min-width: 0; min-height: 900px">
+<header style="display: flex; align-items: center; justify-content: space-between; padding: 18px 32px; gap: 16px; flex-wrap: wrap">
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f">Drafts / Photo books worth keeping</div>
+<div style="display: flex; align-items: center; gap: 12px">
+<div role="group" aria-label="Phlo's role" style="display: inline-flex; border: 1px solid #e4e4df; border-radius: 999px; padding: 3px; background: #ffffff">
+<button style="font-size: 13px; line-height: 18px; padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer; background: #16171a; color: #f7f7f4">Partner</button>
+<button style="font-size: 13px; line-height: 18px; padding: 5px 12px; border: 0; border-radius: 999px; cursor: pointer; background: transparent; color: #66665f">Scribe</button>
+</div>
+<a href="#" style="font-size: 14px; line-height: 20px; color: #16171a; text-decoration: none; padding: 7px 14px; border: 1px solid #16171a; border-radius: 999px">Publish</a>
+<button aria-label="More" style="width: 36px; height: 36px; border: 0; background: transparent; color: #66665f; font-size: 18px; cursor: pointer">···</button>
+</div>
+</header>
+
+<div style="position: relative; max-width: 680px; margin: 0 auto; padding: 32px 32px 160px 32px">
+
+<svg aria-hidden="true" width="40" height="216" viewBox="0 0 40 216" style="position: absolute; left: -16px; top: 112px">
+<path d="M36 1 C 4 1, 4 215, 36 215" fill="none" stroke="#66665f" stroke-width="1"></path>
+</svg>
+<div style="position: absolute; left: -132px; top: 210px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f; background: #f7f7f4; padding: 2px 6px">Blocks launch</div>
+
+<section style="margin-bottom: 48px">
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f">02 · First product</div>
+<h2 style="margin: 8px 0 12px; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; display: flex; align-items: center; gap: 10px"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #2848d8"></span>Pricing</h2>
+<p style="margin: 0; font-size: 16px; line-height: 26px">Priced around $200 per book, with a <span style="text-decoration: underline; text-decoration-color: #2848d8; text-decoration-thickness: 2px; text-underline-offset: 4px">printed proof first</span>.</p>
+</section>
+
+<section style="margin-bottom: 48px">
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f">03 · Launch</div>
+<h2 style="margin: 8px 0 12px; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em">Launch</h2>
+<p style="margin: 0 0 12px; font-size: 16px; line-height: 26px">Ship before wedding season starts in May.</p>
+<div style="display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f; border: 1px solid #e4e4df; border-radius: 999px; padding: 3px 10px">↗ Who it's for · same buyer</div>
+</section>
+
+<section style="position: relative">
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f">04 · Seasons</div>
+<h2 style="margin: 8px 0 12px; font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em">When people buy</h2>
+<p style="margin: 0; font-size: 16px; line-height: 26px"><span style="background: #5cc9e933">Weddings in May. Anniversaries in June. First birthdays all year.</span> Holidays are the long tail.</p>
+
+<div role="menu" aria-label="Turn into" style="position: absolute; left: 440px; top: 70px; width: 264px; background: #ffffff; border: 1px solid #e4e4df; border-radius: 8px; padding: 8px 0; font-size: 14px; line-height: 20px">
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f; padding: 4px 14px">Turn into</div>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: #f7f7f4; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Flow <span style="color: #66665f">timeline</span></button>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Numbers <span style="color: #66665f">›</span></button>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Compare <span style="color: #66665f">›</span></button>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Mark as <span style="color: #66665f">›</span></button>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Make <span style="color: #66665f">wireframe</span></button>
+<div style="height: 1px; background: #e4e4df; margin: 8px 0"></div>
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f; padding: 4px 14px">Phlo</div>
+<button role="menuitem" style="display: block; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Look into</button>
+<button role="menuitem" style="display: block; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Push back</button>
+<button role="menuitem" style="display: block; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Connect</button>
+<div style="height: 1px; background: #e4e4df; margin: 8px 0"></div>
+<div style="font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #66665f; padding: 4px 14px">Theme</div>
+<button role="menuitem" style="display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; background: #2848d8"></span>Pricing</button>
+<button role="menuitem" style="display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 999px; border: 1px solid #66665f; box-sizing: border-box"></span>New theme</button>
+<div style="height: 1px; background: #e4e4df; margin: 8px 0"></div>
+<button role="menuitem" style="display: flex; justify-content: space-between; width: 100%; border: 0; background: transparent; padding: 6px 14px; font-size: 14px; color: #16171a; cursor: pointer; text-align: left">Move to… <span style="color: #66665f">⌥⇧↑↓</span></button>
+</div>
+</section>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

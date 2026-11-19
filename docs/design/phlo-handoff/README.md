@@ -13,7 +13,7 @@ Everything Claude Code needs to bring the Phlo app in line with the new design d
 | `tokens/tokens.json` | Source tokens: colors in both themes, type, spacing, radius | To map into the app's styling |
 | `tokens/tokens.css` | Ready-to-use CSS variables, `[data-theme="sumi"]` for dark, `.type-*` classes, motion variables | Drop into the app |
 | `brand/` | The symbol, lockup, wordmark (light and dark), app icon, symbol family SVGs, an overview PNG, and the 20 content marks in `brand/marks/` | Replacing the logo and icons |
-| `screens/*.dc.html` | Reference markup for the 4 designed screens (Start, Talking, Room view, Sidebar open). Read them for exact spacing, sizes and copy. They're design files, not app code | Building each screen |
+| `screens/*.dc.html` | Reference markup for the 8 designed screens (Start, Talking, Room view, Sidebar open; then Phlo in the margin, Board, Shapes, Connect and right-click). Read them for exact spacing, sizes and copy. They're design files, not app code | Building each screen |
 | `CLAUDE_MD_SNIPPET.md` | Design rules to paste into the repo's CLAUDE.md so they stick | Once, at the start |
 
 Live versions:
