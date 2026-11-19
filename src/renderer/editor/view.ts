@@ -10,7 +10,7 @@
  */
 import type { DocEngine, Op } from "../../engine/engine";
 import { newId } from "../../engine/ids";
-import { tableSummary } from "../../engine/forms";
+import { flowSummary, tableSummary } from "../../engine/forms";
 import { FORM_LABEL, type Block, type Draft, type TableData } from "../../engine/model";
 
 export interface EditorCallbacks {
@@ -82,10 +82,11 @@ export class Editor {
     root.addEventListener(
       "input",
       (e) => {
-        const cell = (e.target as HTMLElement)?.closest?.("td,th") as HTMLElement | null;
+        const cell = (e.target as HTMLElement)?.closest?.("td,th,[data-step]") as HTMLElement | null;
         if (cell) {
           e.stopImmediatePropagation();
-          this.onCellInput(cell);
+          if (cell.dataset.step !== undefined) this.onStepInput(cell);
+          else this.onCellInput(cell);
         }
       },
       true,
@@ -279,6 +280,113 @@ export class Editor {
     }
   }
 
+  // ------------------------------------------------------------------ flows
+
+  /** A flow: steps as cards in reading order, arrows between, each step editable in place. */
+  private paintFlow(el: HTMLElement, b: Block) {
+    el.contentEditable = "false";
+    const steps = b.steps?.length ? b.steps : [""];
+    const sig = JSON.stringify([steps, b.trail?.at(-1) ?? ""]);
+    if (el.dataset.sig === sig) return;
+    const active = document.activeElement as HTMLElement | null;
+    const focusAt = active && el.contains(active) ? active.dataset.step : undefined;
+    el.dataset.sig = sig;
+    el.textContent = "";
+    const row = document.createElement("div");
+    row.className = "flow";
+    row.setAttribute("role", "list");
+    steps.forEach((text, i) => {
+      if (i) {
+        const arrow = document.createElement("span");
+        arrow.className = "flow-arrow";
+        arrow.setAttribute("aria-hidden", "true");
+        row.appendChild(arrow);
+      }
+      const card = document.createElement("div");
+      card.className = "flow-step";
+      card.setAttribute("role", "listitem");
+      const n = document.createElement("span");
+      n.className = "flow-n";
+      n.textContent = String(i + 1).padStart(2, "0");
+      const t = document.createElement("div");
+      t.className = "flow-text";
+      t.contentEditable = "true";
+      t.dataset.step = String(i);
+      t.textContent = text;
+      card.append(n, t);
+      row.appendChild(card);
+    });
+    const tools = document.createElement("div");
+    tools.className = "tbl-tools";
+    const add = document.createElement("button");
+    add.className = "label";
+    add.textContent = "+ Step";
+    add.addEventListener("mousedown", (e) => e.preventDefault());
+    add.addEventListener("click", () => {
+      this.updateFlow(b.id, (st) => [...st, ""]);
+      requestAnimationFrame(() => this.focusStep(b.id, steps.length));
+    });
+    tools.appendChild(add);
+    el.append(row, tools);
+    if (b.trail?.length) {
+      const t = document.createElement("span");
+      t.className = "trail";
+      t.dataset.ui = "1";
+      t.textContent = b.trail[b.trail.length - 1];
+      t.title = b.trail.join("  ·  ");
+      el.appendChild(t);
+    }
+    if (focusAt !== undefined) this.focusStep(b.id, Number(focusAt));
+  }
+
+  private focusStep(id: string, i: number) {
+    const s = this.els.get(id)?.querySelector<HTMLElement>(`[data-step="${i}"]`);
+    if (s) placeCaretEnd(s);
+    return !!s;
+  }
+
+  private updateFlow(id: string, fn: (steps: string[]) => string[], coalesce?: string) {
+    const b = this.engine().block(id);
+    if (!b?.steps) return;
+    const steps = fn([...b.steps]);
+    this.commit([{ t: "update", id, patch: { steps, text: flowSummary(steps) } }], "Edit flow", coalesce);
+  }
+
+  private onStepInput(cell: HTMLElement) {
+    const el = cell.closest<HTMLElement>(".blk");
+    const id = el?.dataset.id;
+    if (!el || !id) return;
+    const i = Number(cell.dataset.step);
+    const text = (cell.textContent ?? "").replace(/\n/g, " ");
+    const b0 = this.engine().block(id);
+    this.updateFlow(
+      id,
+      (st) => {
+        st[i] = text;
+        el.dataset.sig = JSON.stringify([st, b0?.trail?.at(-1) ?? ""]);
+        return st;
+      },
+      `step:${id}:${i}`,
+    );
+  }
+
+  private flowKey(e: KeyboardEvent, cell: HTMLElement): boolean {
+    const id = cell.closest<HTMLElement>(".blk")!.dataset.id!;
+    const i = Number(cell.dataset.step);
+    const b = this.engine().block(id);
+    if (!b?.steps) return false;
+    if (e.key === "Tab" || (e.key === "Enter" && !e.shiftKey)) {
+      e.preventDefault();
+      const next = i + (e.shiftKey ? -1 : 1);
+      if (!this.focusStep(id, next) && !e.shiftKey) {
+        this.updateFlow(id, (st) => [...st.slice(0, i + 1), "", ...st.slice(i + 1)]);
+        requestAnimationFrame(() => this.focusStep(id, i + 1));
+      }
+      return true;
+    }
+    return false;
+  }
+
   private updateTable(id: string, fn: (d: TableData) => TableData, coalesce?: string) {
     const b = this.engine().block(id);
     if (!b?.data) return;
@@ -370,6 +478,10 @@ export class Editor {
       this.paintTable(el, b);
       return;
     }
+    if (b.kind === "flow") {
+      this.paintFlow(el, b);
+      return;
+    }
     if (el.dataset.sig !== undefined) {
       // Was a table: back to an editable text block.
       el.removeAttribute("contenteditable");
@@ -455,7 +567,7 @@ export class Editor {
         const id = n.dataset.id;
         domIds.add(id);
         const b = model.get(id)!;
-        if (b.kind === "table") {
+        if (b.kind === "table" || b.kind === "flow") {
           prevId = id;
           continue;
         }
@@ -500,6 +612,11 @@ export class Editor {
   private onKeyDown(e: KeyboardEvent) {
     if (e.isComposing) return;
     if (this.cb.onMenuKey?.(e)) return;
+    const step = (e.target as HTMLElement)?.closest?.("[data-step]") as HTMLElement | null;
+    if (step) {
+      if (this.flowKey(e, step)) return;
+      if (e.key !== "z") return;
+    }
     const cell = (e.target as HTMLElement)?.closest?.("td,th") as HTMLElement | null;
     if (cell && this.tableKey(e, cell)) return;
     if (cell && e.key !== "z") return;

@@ -97,7 +97,7 @@ export const SettlePlanSchema = z.object({
         target: z.string().describe("Existing block or heading id the instruction is about."),
         dest: z.string().nullable().describe("merge: heading id to merge into. move_before/move_after: heading id. Otherwise null."),
         text: z.string().nullable().describe("rename: the new heading text. Otherwise null."),
-        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision", "idea", "callout", "heading", "table"]).nullable().describe("retype: the new kind. Otherwise null."),
+        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision", "idea", "callout", "heading", "table", "flow"]).nullable().describe("retype: the new kind ('flow' = a flowchart of steps). Otherwise null."),
       }),
     )
     .describe("Only for explicit instructions about the page's structure: 'rename X to Y', 'move X under Y' (merge), 'put X before Y', 'park/remove X', 'make that a question'. The instruction's own wet id goes in consumed."),
@@ -621,7 +621,7 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
         removeFromOrder(id);
       }
       structuralLabels.push(`Parked ${t.kind === "heading" ? t.text : `“${t.text.slice(0, 32)}”`}`);
-    } else if (st.op === "retype" && st.kind && st.kind !== t.kind && (st.kind === "table" || t.kind === "table")) {
+    } else if (st.op === "retype" && st.kind && st.kind !== t.kind && (st.kind === "table" || t.kind === "table" || st.kind === "flow" || t.kind === "flow")) {
       const conv = turnIntoOps(draft.blocks, t.id, st.kind);
       ops.push(...conv.ops);
       structuralLabels.push(conv.label || `Made it a ${st.kind}`);
@@ -643,6 +643,23 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
       issues.push(`bad revision target ${r.block_id}`);
       continue;
     }
+    // Tables and flows keep their meaning in cells/steps: apply the correction there.
+    if ((b.kind === "flow" && b.steps) || (b.kind === "table" && b.data)) {
+      const edit = spanEdit(seen.text, r.text.trim());
+      const fix = (cell: string) => (edit && edit.from && cell.includes(edit.from) ? cell.replace(edit.from, edit.to) : cell);
+      if (!edit?.from) {
+        issues.push(`revision on ${b.kind} had no single change`);
+        continue;
+      }
+      if (b.kind === "flow") {
+        const steps = b.steps!.map(fix);
+        ops.push({ t: "update", id: b.id, expectRev: seen.rev, patch: { steps, text: `Flow · ${steps.join(" → ")}`, trail: [...(b.trail ?? []), b.steps!.join(" → ")] } });
+      } else {
+        const data = { columns: b.data!.columns.map(fix), rows: b.data!.rows.map((row) => row.map(fix)) };
+        ops.push({ t: "update", id: b.id, expectRev: seen.rev, patch: { data, text: r.text.trim(), trail: [...(b.trail ?? []), seen.text] } });
+      }
+      continue;
+    }
     ops.push({
       t: "update",
       id: b.id,
@@ -661,6 +678,20 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
   ops.push(...themeOps(draft, order, kindOf, ops));
 
   return { ops, settledIds, createdIds, issues, question: plan.question, structural: structuralLabels };
+}
+
+/** The one changed span between two versions of a text: "best sixty" → "best forty" gives sixty → forty. */
+export function spanEdit(before: string, after: string): { from: string; to: string } | null {
+  let p = 0;
+  while (p < before.length && p < after.length && before[p] === after[p]) p++;
+  let q = 0;
+  while (q < before.length - p && q < after.length - p && before[before.length - 1 - q] === after[after.length - 1 - q]) q++;
+  // Widen to whole words so "sixty" → "forty" doesn't become "six" → "for".
+  while (p > 0 && /\w/.test(before[p - 1])) p--;
+  while (q > 0 && /\w/.test(before[before.length - q])) q--;
+  const from = before.slice(p, before.length - q);
+  const to = after.slice(p, after.length - q);
+  return from === to ? null : { from, to };
 }
 
 function headingOfOrder(order: string[], kindOf: Map<string, BlockKind>, id: string): string | null {

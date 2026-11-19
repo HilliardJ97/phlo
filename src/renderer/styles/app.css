@@ -396,3 +396,22 @@ dialog.settings .linkish { color: var(--cobalt); }
 dialog.settings .linkish:hover { text-decoration: underline; text-underline-offset: 3px; }
 dialog.settings #compat-fields { border-top: 1px solid var(--hairline); padding-top: 16px; margin: 4px 0 20px; }
 dialog.settings { max-height: calc(100vh - 48px); overflow-y: auto; }
+
+/* Flow: steps as hairline cards in reading order, arrows between. Wraps on narrow columns. */
+.blk[data-kind="flow"] { margin: var(--space-3) 0; }
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 0; }
+.flow-step {
+  flex: 1 1 140px; max-width: 220px; min-height: 76px; background: var(--paper-raised);
+  border: 1px solid var(--hairline); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;
+}
+.flow-step:focus-within { border-color: var(--ink-muted); }
+.flow-n { font: var(--text-label); letter-spacing: var(--track-label); color: var(--ink-muted); user-select: none; }
+.flow-text { font: var(--text-small); color: var(--ink); outline: none; min-height: 20px; }
+.flow-arrow { flex: 0 0 28px; align-self: center; height: 1px; background: var(--ink-muted); position: relative; }
+.flow-arrow::after {
+  content: ""; position: absolute; right: 0; top: -3px; border-left: 6px solid var(--ink-muted);
+  border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+}
+.blk[data-kind="flow"]:hover .tbl-tools, .blk[data-kind="flow"]:focus-within .tbl-tools { opacity: 1; }
+body.room .flow-text { font: var(--room-body); }
+body.room .flow-step { max-width: 260px; }

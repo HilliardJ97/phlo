@@ -30,6 +30,8 @@ export type Check =
   | { absent: string[]; gap?: boolean }
   /** These headings appear in this order. */
   | { order: string[]; gap?: boolean }
+  /** A flow exists whose steps contain these words. */
+  | { flow: string[]; gap?: boolean }
   /** A table exists whose cells contain these words. */
   | { table: string[]; gap?: boolean }
   /** The draft got a title containing one of these words. */
@@ -232,6 +234,14 @@ export const SCENARIOS: Scenario[] = [
       {
         say: "make these a table",
         expect: [{ table: ["Notion", "Granola"] }, { absent: ["make these a table"] }],
+      },
+      {
+        say: "new section how it works: one, you upload photos. two, Phlo picks the best sixty. three, you order the book",
+        expect: [{ heading: "how it works" }],
+      },
+      {
+        say: "make that a flowchart",
+        expect: [{ flow: ["upload", "order"] }, { absent: ["make that a flowchart"] }],
       },
     ],
   },

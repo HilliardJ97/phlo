@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { DocEngine } from "../src/engine/engine";
 import { emptyDraft, type Block } from "../src/engine/model";
 import { listRun, listToTable, splitItem, tableToItems, turnIntoOps } from "../src/engine/forms";
+import { buildRequest, compilePlan, spanEdit } from "../src/engine/settle";
+import { localPlan } from "../src/engine/local";
+import { withCorrectionTarget } from "../src/engine/settle";
 
 const b = (id: string, kind: Block["kind"], text: string): Block => ({ id, kind, text, wet: false, rev: 0, origin: "typed" });
 
@@ -58,6 +61,41 @@ describe("Turn into", () => {
     e.commit({ id: "t", actor: "user", label: t.label, ops: t.ops });
     e.undo("t");
     expect(e.state.blocks.map((x) => x.id)).toEqual(["h", "a", "c", "d", "p"]);
+  });
+
+  it("steps become a flow and back, every word kept", () => {
+    const e = new DocEngine(emptyDraft("f2"));
+    e.commit({ id: "s", actor: "user", label: "s", ops: [
+      { t: "insert", block: b("n1", "numbered", "Upload photos"), after: null },
+      { t: "insert", block: b("n2", "numbered", "Phlo picks the best 60"), after: "n1" },
+      { t: "insert", block: b("n3", "numbered", "Order the book."), after: "n2" },
+    ] });
+    const f = turnIntoOps(e.state.blocks, "n2", "flow");
+    e.commit({ id: "f", actor: "user", label: f.label, ops: f.ops });
+    const flow = e.state.blocks.find((x) => x.kind === "flow")!;
+    expect(flow.steps).toEqual(["Upload photos", "Phlo picks the best 60", "Order the book"]);
+    const back = turnIntoOps(e.state.blocks, flow.id, "numbered");
+    e.commit({ id: "g", actor: "user", label: back.label, ops: back.ops });
+    expect(e.state.blocks.map((x) => [x.kind, x.text])).toEqual([["numbered", "Upload photos"], ["numbered", "Phlo picks the best 60"], ["numbered", "Order the book"]]);
+    const one = new DocEngine(emptyDraft("f3"));
+    one.commit({ id: "s", actor: "user", label: "s", ops: [{ t: "insert", block: b("p", "paragraph", "Sign up, then pick photos, then pay."), after: null }] });
+    const g = turnIntoOps(one.state.blocks, "p", "flow");
+    one.commit({ id: "f", actor: "user", label: g.label, ops: g.ops });
+    expect(one.state.blocks[0].steps).toEqual(["Sign up", "pick photos", "pay"]);
+  });
+
+  it("a spoken correction changes the step inside a flow", () => {
+    expect(spanEdit("Phlo picks the best sixty", "Phlo picks the best forty")).toEqual({ from: "sixty", to: "forty" });
+    const e = new DocEngine(emptyDraft("f4"));
+    e.commit({ id: "s", actor: "user", label: "s", ops: [
+      { t: "insert", block: { ...b("fl", "flow", "Flow · Upload → Phlo picks the best sixty → Order"), steps: ["Upload", "Phlo picks the best sixty", "Order"] }, after: null },
+      { t: "insert", block: { ...b("w", "paragraph", "no wait, not sixty, it's more like forty"), wet: true, origin: "voice" }, after: "fl" },
+    ] });
+    const req = withCorrectionTarget(buildRequest(e.snapshot(), ["w"], { currentHeadingId: null, recent: [] }));
+    const c = compilePlan(e.state, req, localPlan(req)!);
+    expect(e.commit({ id: "x", actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
+    expect(e.block("fl")!.steps).toEqual(["Upload", "Phlo picks the best forty", "Order"]);
+    expect(e.block("fl")!.trail).toEqual(["Upload → Phlo picks the best sixty → Order"]);
   });
 
   it("text forms are a kind change only", () => {

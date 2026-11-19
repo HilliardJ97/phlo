@@ -21,7 +21,8 @@ export type BlockKind =
   | "decision"
   | "idea"
   | "callout"
-  | "table";
+  | "table"
+  | "flow";
 
 /** Thinking forms carry a mono label; they're how Phlo models thinking, not formatting. */
 export const FORM_LABEL: Partial<Record<BlockKind, string>> = {
@@ -61,6 +62,8 @@ export interface Block {
   sources?: string[];
   /** Structured meaning for non-text forms (tables). Text forms leave it unset. */
   data?: TableData;
+  /** A flow's steps, in order. */
+  steps?: string[];
 }
 
 export type Role = "partner" | "scribe";

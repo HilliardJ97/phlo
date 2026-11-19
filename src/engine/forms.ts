@@ -30,6 +30,7 @@ export const FORM_OPTIONS: FormOption[] = [
   { kind: "idea", label: "Idea", hint: "Worth keeping" },
   { kind: "callout", label: "Note", hint: "Don't miss this" },
   { kind: "table", label: "Table", hint: "Compare items side by side" },
+  { kind: "flow", label: "Flow", hint: "Steps as a diagram" },
 ];
 
 /** The contiguous run of list-like blocks around `id` (what "these" means). */
@@ -71,6 +72,10 @@ export function tableToItems(data: TableData): string[] {
   });
 }
 
+export function flowSummary(steps: string[]): string {
+  return `Flow · ${steps.join(" → ")}`;
+}
+
 /** A short text stand-in for a table, so models and search can see it. */
 export function tableSummary(data: TableData): string {
   return `Table · ${data.columns.join(" | ")} · ${data.rows.length} rows: ${data.rows.map((r) => r.join(" | ")).join("; ")}`;
@@ -101,6 +106,37 @@ export function turnIntoOps(blocks: Block[], id: string, kind: BlockKind): { ops
     const ops: Op[] = [{ t: "insert", block: { id: tid, kind: "table", text: tableSummary(data), data, wet: false, rev: 0, origin: run[0].origin }, after: prev?.id ?? null }];
     for (const r of run) ops.push({ t: "park", id: r.id, expectRev: r.rev });
     return { ops, focus: tid, label: `Made a table from ${run.length} ${run.length === 1 ? "line" : "lines"}` };
+  }
+
+  if (kind === "flow" && b.kind !== "flow") {
+    // A table's first column, a list run, or one paragraph's sentences become steps.
+    const run = b.kind === "table" && b.data ? [] : listRun(blocks, id).filter((x) => x.text.trim());
+    let steps =
+      b.kind === "table" && b.data
+        ? b.data.rows.map((r) => r.filter((c) => c.trim()).join(": ")).filter(Boolean)
+        : run.length > 1
+          ? run.map((x) => x.text.trim().replace(/[.;]+$/, ""))
+          : b.text.split(/(?<=[.;])\s+|\s*(?:→|->|, then | then )\s*/i).map((x) => x.trim().replace(/[.;]+$/, "")).filter(Boolean);
+    if (!steps.length) steps = ["", ""];
+    const fid = newId("b");
+    const first = run.length > 1 ? run[0] : b;
+    const prev = blocks[blocks.findIndex((x) => x.id === first.id) - 1];
+    const ops: Op[] = [{ t: "insert", block: { id: fid, kind: "flow", text: flowSummary(steps), steps, wet: false, rev: 0, origin: b.origin }, after: prev?.id ?? null }];
+    for (const r of run.length > 1 ? run : [b]) ops.push({ t: "park", id: r.id, expectRev: r.rev });
+    return { ops, focus: fid, label: `Made a flow of ${steps.length} steps` };
+  }
+
+  if (b.kind === "flow" && b.steps) {
+    const ops: Op[] = [];
+    let after = id;
+    const k = kind === "table" ? "bullet" : kind === "heading" ? "numbered" : kind;
+    for (const text of b.steps) {
+      const nid = newId("b");
+      ops.push({ t: "insert", block: { id: nid, kind: k, text, wet: false, rev: 0, origin: b.origin, depth: k === "bullet" ? 0 : undefined }, after });
+      after = nid;
+    }
+    ops.push({ t: "park", id, expectRev: b.rev });
+    return { ops, focus: after, label: `Made ${b.steps.length} steps from the flow` };
   }
 
   if (b.kind === "table" && b.data) {

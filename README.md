@@ -30,7 +30,7 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 | Structure by hand | `# ` heading · `- ` bullet · `? ` open question · Tab / ⇧Tab for list depth |
 | Change your mind | Say "scratch that, …" or "not forty, sixty". The old version folds into an `EARLIER:` trail. Nothing is deleted. |
 | Restructure by voice | "rename pricing to business model", "move risks under pricing", "put goals before hiring", "park other trends", "make that a decision", "make these a table". A toast names the change, with Undo. |
-| Forms | Type `/` on a new line to add one, or right-click any line to **Turn into**: text, heading, bullets, numbered, open question, decision, idea, note, table. Tab / Enter move through table cells. |
+| Forms | Type `/` on a new line to add one, or right-click any line to **Turn into**: text, heading, bullets, numbered, open question, decision, idea, note, table, flow. Tab / Enter move through table cells and flow steps. Say "make that a flowchart" or "make these a table". |
 | Direct it | "new section pricing: …", "under risks: …" are handled instantly, on-device. |
 | Tangents | "oh also, …" becomes a `TANGENT · LATER` tab in the margin. Click it to bring it into the section you're in. |
 | Action items | "talk to 5 couples" goes to the **Next** list at the end. |
@@ -40,6 +40,10 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 | Transcript | ··· → Transcript, with time codes. |
 | Publish | A ghost button until the draft has 3 sections with content, then solid. |
 | Undo | ⌘Z undoes the last change, including a settle, without touching what you typed elsewhere. |
+
+## The design test
+
+`e2e/design-test.cjs` runs the handoff's test in the real app: speak, change an idea into a flowchart, paste evidence, correct a mistake by voice ("not sixty, forty" fixes the step inside the diagram, with the old version in its trail), without losing your place. It passes in about 7 seconds.
 
 ## Acceptance checks
 

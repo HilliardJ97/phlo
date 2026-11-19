@@ -151,6 +151,10 @@ function grade(e: DocEngine, c: Check, touched: string[], source: string, before
     const ok = idx.every((i) => i >= 0) && idx.every((v, i) => i === 0 || v > idx[i - 1]);
     return r(`order: ${c.order.join(" → ")}`, ok, ok ? "" : `headings: ${hs.join(", ")}`);
   }
+  if ("flow" in c) {
+    const f = blocks.find((b) => b.kind === "flow" && b.steps && has(b.steps.join(" "), c.flow));
+    return r(`flow with ${c.flow.join(", ")}`, !!f, f ? "" : `no flow with those steps (kinds: ${blocks.map((b) => b.kind).join(",")})`);
+  }
   if ("table" in c) {
     const t = blocks.find((b) => b.kind === "table" && b.data && has(b.data.rows.flat().join(" "), c.table));
     return r(`table with ${c.table.join(", ")}`, !!t, t ? "" : "no table with those items");
@@ -171,6 +175,10 @@ function toMarkdown(e: DocEngine): string {
     const wet = b.wet ? " [WET]" : "";
     if (b.kind === "table" && b.data) {
       out.push("", `| ${b.data.columns.join(" | ")} |`, `|${b.data.columns.map(() => "---").join("|")}|`, ...b.data.rows.map((r) => `| ${r.join(" | ")} |`), "");
+      continue;
+    }
+    if (b.kind === "flow" && b.steps) {
+      out.push("", b.steps.map((x, i) => `[${i + 1}. ${x}]`).join(" → "), "");
       continue;
     }
     if (b.kind === "heading") out.push("", `## ${b.text}`);
