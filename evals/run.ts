@@ -151,6 +151,10 @@ function grade(e: DocEngine, c: Check, touched: string[], source: string, before
     const ok = idx.every((i) => i >= 0) && idx.every((v, i) => i === 0 || v > idx[i - 1]);
     return r(`order: ${c.order.join(" → ")}`, ok, ok ? "" : `headings: ${hs.join(", ")}`);
   }
+  if ("chart" in c) {
+    const ch = blocks.find((b) => b.kind === "chart" && b.chart && c.chart.every((v) => b.chart!.series.some((sr) => sr.values.includes(v))));
+    return r(`chart with ${c.chart.join(", ")}`, !!ch, ch ? "" : `no chart with those values (kinds: ${blocks.map((b) => b.kind).join(",")})`);
+  }
   if ("flow" in c) {
     const f = blocks.find((b) => b.kind === "flow" && b.steps && has(b.steps.join(" "), c.flow));
     return r(`flow with ${c.flow.join(", ")}`, !!f, f ? "" : `no flow with those steps (kinds: ${blocks.map((b) => b.kind).join(",")})`);

@@ -30,6 +30,8 @@ export type Check =
   | { absent: string[]; gap?: boolean }
   /** These headings appear in this order. */
   | { order: string[]; gap?: boolean }
+  /** A chart exists with these values. */
+  | { chart: number[]; gap?: boolean }
   /** A flow exists whose steps contain these words. */
   | { flow: string[]; gap?: boolean }
   /** A table exists whose cells contain these words. */
@@ -242,6 +244,14 @@ export const SCENARIOS: Scenario[] = [
       {
         say: "make that a flowchart",
         expect: [{ flow: ["upload", "order"] }, { absent: ["make that a flowchart"] }],
+      },
+      {
+        say: "new section signups: Jan 120, Feb 180, March 260",
+        expect: [{ heading: "signups" }],
+      },
+      {
+        say: "chart that",
+        expect: [{ chart: [120, 180, 260] }, { absent: ["chart that"] }],
       },
     ],
   },

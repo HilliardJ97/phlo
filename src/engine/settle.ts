@@ -97,7 +97,7 @@ export const SettlePlanSchema = z.object({
         target: z.string().describe("Existing block or heading id the instruction is about."),
         dest: z.string().nullable().describe("merge: heading id to merge into. move_before/move_after: heading id. Otherwise null."),
         text: z.string().nullable().describe("rename: the new heading text. Otherwise null."),
-        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision", "idea", "callout", "heading", "table", "flow"]).nullable().describe("retype: the new kind ('flow' = a flowchart of steps). Otherwise null."),
+        kind: z.enum(["paragraph", "bullet", "numbered", "question", "decision", "idea", "callout", "heading", "subheading", "table", "flow", "chart", "timeline", "columns"]).nullable().describe("retype: the new kind ('flow' = flowchart of steps, 'chart' needs real numbers, 'subheading' = a smaller heading that can fold). Otherwise null."),
       }),
     )
     .describe("Only for explicit instructions about the page's structure: 'rename X to Y', 'move X under Y' (merge), 'put X before Y', 'park/remove X', 'make that a question'. The instruction's own wet id goes in consumed."),
@@ -621,14 +621,23 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
         removeFromOrder(id);
       }
       structuralLabels.push(`Parked ${t.kind === "heading" ? t.text : `“${t.text.slice(0, 32)}”`}`);
-    } else if (st.op === "retype" && st.kind && st.kind !== t.kind && (st.kind === "table" || t.kind === "table" || st.kind === "flow" || t.kind === "flow")) {
-      const conv = turnIntoOps(draft.blocks, t.id, st.kind);
+    } else if (st.op === "retype" && st.kind === "subheading") {
+      ops.push({ t: "update", id: t.id, expectRev: seen.rev, patch: { kind: "heading", level: 2, wet: false } });
+      kindOf.set(t.id, "heading");
+      structuralLabels.push("Made it a subheading");
+    } else if (st.op === "retype" && st.kind && st.kind !== t.kind && (["table", "flow", "chart", "timeline", "columns"] as string[]).some((k) => k === st.kind || k === t.kind)) {
+      const conv = turnIntoOps(draft.blocks, t.id, st.kind as BlockKind);
+      if (!conv.ops.length) {
+        issues.push(conv.label || `can't make ${st.kind}`);
+        if (conv.label) structuralLabels.push(conv.label);
+        continue;
+      }
       ops.push(...conv.ops);
       structuralLabels.push(conv.label || `Made it a ${st.kind}`);
     } else if (st.op === "retype" && st.kind && st.kind !== t.kind) {
-      ops.push({ t: "update", id: t.id, expectRev: seen.rev, patch: { kind: st.kind, wet: false, ...(st.kind === "bullet" ? { depth: 0 } : {}) } });
-      kindOf.set(t.id, st.kind);
-      structuralLabels.push(`Made it ${/^[aeiou]/.test(st.kind) ? "an" : "a"} ${FORM_NAME[st.kind] ?? st.kind}`);
+      ops.push({ t: "update", id: t.id, expectRev: seen.rev, patch: { kind: st.kind as BlockKind, wet: false, ...(st.kind === "bullet" ? { depth: 0 } : {}) } });
+      kindOf.set(t.id, st.kind as BlockKind);
+      structuralLabels.push(`Made it ${/^[aeiou]/.test(st.kind) ? "an" : "a"} ${FORM_NAME[st.kind as BlockKind] ?? st.kind}`);
     } else {
       issues.push(`unsupported structure ${st.op} on ${st.target}`);
     }

@@ -20,8 +20,9 @@ const RENAME = /^(?:ok(?:ay)?,?\s+)?(?:rename|retitle|call)\s+(?:the\s+)?(.+?)(?
 const MERGE = /^(?:ok(?:ay)?,?\s+)?(?:move|put|merge|fold)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s+(?:under|into|in|with)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?(?:\s*[,.;—-].*)?$/i;
 const MOVE = /^(?:ok(?:ay)?,?\s+)?(?:move|put)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s+(before|above|after|below)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?[.!]?$/i;
 const PARK = /^(?:ok(?:ay)?,?\s+)?(?:park|remove|delete|drop|get rid of)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?[.!]?$/i;
-const RETYPE = /^(?:ok(?:ay)?,?\s+)?(?:make|turn)\s+(?:that|this|it|these|those|them|the last (?:one|line|point))\s+(?:into\s+)?(?:a|an)?\s*(bullets?|questions?|headings?|paragraphs?|numbered(?: list| steps)?|steps|decisions?|ideas?|notes?|callouts?|table|flow ?chart|flow|diagram|process)[.!]?$/i;
-const RETYPE_KIND: Record<string, string> = { bullet: "bullet", bullets: "bullet", question: "question", questions: "question", heading: "heading", headings: "heading", paragraph: "paragraph", paragraphs: "paragraph", numbered: "numbered", "numbered list": "numbered", "numbered steps": "numbered", steps: "numbered", decision: "decision", decisions: "decision", idea: "idea", ideas: "idea", note: "callout", notes: "callout", callout: "callout", callouts: "callout", table: "table", flow: "flow", flowchart: "flow", "flow chart": "flow", diagram: "flow", process: "flow" };
+const RETYPE = /^(?:ok(?:ay)?,?\s+)?(?:make|turn|put)\s+(?:that|this|it|these|those|them|the last (?:one|line|point))\s+(?:into\s+)?(?:a|an)?\s*(bullets?|questions?|headings?|paragraphs?|numbered(?: list| steps)?|steps|decisions?|ideas?|notes?|callouts?|table|flow ?chart|flow|diagram|process|(?:bar |line )?chart|graph|histogram|timeline|roadmap|columns|sub ?heading|toggle)[.!]?$/i;
+const RETYPE_KIND: Record<string, string> = { bullet: "bullet", bullets: "bullet", question: "question", questions: "question", heading: "heading", headings: "heading", paragraph: "paragraph", paragraphs: "paragraph", numbered: "numbered", "numbered list": "numbered", "numbered steps": "numbered", steps: "numbered", decision: "decision", decisions: "decision", idea: "idea", ideas: "idea", note: "callout", notes: "callout", callout: "callout", callouts: "callout", table: "table", flow: "flow", flowchart: "flow", "flow chart": "flow", diagram: "flow", process: "flow", chart: "chart", "bar chart": "chart", "line chart": "chart", graph: "chart", histogram: "chart", timeline: "timeline", roadmap: "timeline", columns: "columns", subheading: "subheading", "sub heading": "subheading", toggle: "subheading" };
+const CHART_THAT = /^(?:ok(?:ay)?,?\s+)?(?:chart|graph|plot|visualize)\s+(?:that|this|these|those|it|them)[.!]?$/i;
 const QUESTION_START = /^(?:what|why|how|who|when|where|which|should|could|would|can|do|does|is|are|will)\b/i;
 
 export interface LocalOptions {
@@ -32,7 +33,7 @@ export interface LocalOptions {
 /** True when every wet item is an explicit instruction the local route fully understands. */
 export function isExplicitCommand(text: string): boolean {
   const t = text.trim();
-  return [NEW_SECTION, UNDER, SCRATCH, RENAME, MERGE, MOVE, PARK, RETYPE].some((re) => re.test(t));
+  return [NEW_SECTION, UNDER, SCRATCH, RENAME, MERGE, MOVE, PARK, RETYPE, CHART_THAT].some((re) => re.test(t));
 }
 
 function kindFor(text: string, origin: WetItem["origin"]): "paragraph" | "bullet" | "question" | "decision" {
@@ -135,6 +136,11 @@ export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePl
     const pkId = pk ? findHeadingByName(pk[1], req, newRefs) : null;
     if (pk && pkId) {
       plan.structure.push({ op: "park", target: pkId, dest: null, text: null, kind: null });
+      plan.consumed.push(w.id);
+      continue;
+    }
+    if (CHART_THAT.test(text) && req.recent[0]) {
+      plan.structure.push({ op: "retype", target: req.recent[0], dest: null, text: null, kind: "chart" });
       plan.consumed.push(w.id);
       continue;
     }

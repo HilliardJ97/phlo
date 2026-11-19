@@ -4,11 +4,12 @@
  */
 import { DocEngine, type Op } from "../engine/engine";
 import { newId } from "../engine/ids";
-import { emptyDraft, sections, substantiveSectionCount, type Block, type Draft, type PublishedPiece, type Role } from "../engine/model";
-import { buildRequest, compilePlan, headingOf, type SettleResponse } from "../engine/settle";
+import { emptyDraft, ISLAND_KINDS, sections, substantiveSectionCount, type Block, type Draft, type PublishedPiece, type Role } from "../engine/model";
+import { buildRequest, compilePlan, contentWords, headingOf, type SettleResponse } from "../engine/settle";
 import { host, HostError, type HostSettings } from "./bridge";
-import { Editor, inPage } from "./editor/view";
-import { FORM_OPTIONS, listRun, suggestForm, turnIntoOps } from "../engine/forms";
+import { Editor, embedSrc, inPage } from "./editor/view";
+import { chartSummary, FORM_OPTIONS, suggestForm, turnIntoOps, type FormOption, type MediaAction } from "../engine/forms";
+import { parseVoiceIntent } from "../engine/intents";
 import { BrowserSTT, browserSttAvailable, UtteranceSTT, type Stt } from "./voice/stt";
 
 // ============================================================================ helpers
@@ -175,7 +176,12 @@ const editor = new Editor(docEl, () => engine, {
   onPaste: (e) => handlePaste(e),
   onUndo: () => undo(),
   onRedo: () => void engine.redo(),
-  onSlash: (id, query) => (id ? openForms(id, "add", query) : formsMode === "add" && closeForms()),
+  onSlash: (id, query) => (id ? openForms(id, "add", query) : formsMode === "add" && !formsStage && closeForms()),
+  onFold: (id) => {
+    const b = engine.block(id);
+    if (b) engine.commit({ id: newId("tx"), actor: "user", label: b.collapsed ? "Unfold" : "Fold", ops: [{ t: "update", id, patch: { collapsed: !b.collapsed } }] });
+  },
+  onTurnInto: (id, kind) => turnInto(id, kind),
   onMenuKey: (e) => formsKey(e),
 });
 
@@ -637,9 +643,57 @@ function setVoiceLabel() {
   voiceLabel.textContent = !talking ? "Hold space to talk" : locked ? "Listening · tap space to stop" : "Listening · release space to stop";
 }
 
+/** Things you ask for aloud (an image, a chart, folding a section) happen directly and never become words on the page. */
+function runIntent(clean: string): boolean {
+  const intent = parseVoiceIntent(clean);
+  if (!intent) return false;
+  engine.commit({ id: newId("tx"), actor: "voice", label: "Speech", noHistory: true, ops: [{ t: "transcript", segment: { id: newId("t"), at: Date.now(), text: clean } }] });
+  const anchor = voiceAnchor() ?? engine.state.blocks.at(-1)?.id ?? null;
+  const add = (block: Block) => {
+    if (!anchor) return;
+    const txId = newId("tx");
+    if (engine.commit({ id: txId, actor: "voice", label: `Add ${block.kind}`, ops: [{ t: "insert", block, after: anchor }] }).ok) {
+      lastVoiceBlock = null;
+      render([block.id]);
+      editor.elementOf(block.id)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  };
+  if (intent.type === "chart") {
+    add({ id: newId("b"), kind: "chart", text: chartSummary(intent.chart), chart: intent.chart, wet: false, rev: 0, origin: "voice" });
+    toast(`Made a ${intent.chart.type} chart${intent.title ? ` of ${intent.title.toLowerCase()}` : ""}. Say where the numbers come from to add a source.`, undefined, 5000);
+  } else if (intent.type === "fold") {
+    const want = contentWords(intent.name).join(" ");
+    const h = engine.state.blocks.find((b) => b.kind === "heading" && (contentWords(b.text).join(" ") === want || b.text.toLowerCase().includes(intent.name.toLowerCase())));
+    if (h) engine.commit({ id: newId("tx"), actor: "voice", label: intent.fold ? "Fold" : "Unfold", ops: [{ t: "update", id: h.id, patch: { collapsed: intent.fold } }] });
+    else toast(`No section called “${intent.name}”.`);
+  } else if (intent.type === "find-image") {
+    toast(`Finding a photo of ${intent.query}…`, undefined, 8000);
+    void host
+      .findImages(intent.query)
+      .then((found) => {
+        const img = found[0];
+        if (!img) return toast("No openly licensed photo found. Try other words.");
+        add({ id: newId("b"), kind: "image", text: img.title, wet: false, rev: 0, origin: "voice", media: { src: img.url, alt: img.title, credit: img.credit, creditUrl: img.creditUrl, via: "web" } });
+        toast("Added a photo, credited under it.");
+      })
+      .catch((e) => toast(e instanceof Error ? e.message : "Photo search failed."));
+  } else if (intent.type === "generate-image") {
+    toast(`Generating ${intent.prompt}…`, undefined, 30000);
+    void host
+      .generateImage(intent.prompt)
+      .then((out) => {
+        add({ id: newId("b"), kind: "image", text: intent.prompt, wet: false, rev: 0, origin: "voice", media: { src: out.dataUrl, alt: intent.prompt, via: "generated" } });
+        toast("Image added.");
+      })
+      .catch((e) => toast(e instanceof Error ? e.message : "Image generation failed.", { label: "Your AI", run: () => void openSettings() }, 8000));
+  }
+  return true;
+}
+
 function addSpeech(text: string) {
   const clean = text.trim();
   if (!clean) return;
+  if (runIntent(clean)) return;
   clearAsk();
   lastSpeechAt = performance.now();
   const blocks = engine.state.blocks;
@@ -855,6 +909,20 @@ window.addEventListener(
 function handlePaste(e: ClipboardEvent): boolean {
   const items = Array.from(e.clipboardData?.items ?? []);
   const img = items.find((i) => i.type.startsWith("image/"));
+  // Pasting into the page puts things where your caret is; pasting elsewhere files them in References.
+  const inPageAt = docEl.contains(e.target as Node) ? caretBlock : null;
+  const pasted = (e.clipboardData?.getData("text/plain") ?? "").trim();
+  if (img && inPageAt) {
+    e.preventDefault();
+    const file = img.getAsFile();
+    if (file) void insertImageFile(inPageAt, file, "Pasted image");
+    return true;
+  }
+  if (inPageAt && /^https?:\/\/\S+$/.test(pasted) && embedSrc(pasted)) {
+    e.preventDefault();
+    insertEmbed(inPageAt, pasted);
+    return true;
+  }
   if (img) {
     e.preventDefault();
     const file = img.getAsFile();
@@ -901,81 +969,239 @@ docEl.addEventListener("input", () => {
   }
 });
 
-// ============================================================================ forms: Add (/) and Turn into (right-click)
+// ============================================================================ forms: Add (/ or +) and Turn into (right-click)
+//
+// One menu, grouped Text · Thinking · Visual · Media. Type to filter. Media
+// actions ask for one thing (search words, a description, a link) inside the
+// same menu, so there are no dialogs. Everything here can also be said aloud.
 
 const formsEl = $<HTMLDivElement>("forms-menu");
 let formsMode: "add" | "turn" | null = null;
 let formsTarget: string | null = null;
 let formsIndex = 0;
-let formsShown = FORM_OPTIONS;
+let formsShown: FormOption[] = FORM_OPTIONS;
+let formsStage: { action: MediaAction; busy?: boolean } | null = null;
+const fileInput = Object.assign(document.createElement("input"), { type: "file", accept: "image/png,image/jpeg,image/webp,image/gif", hidden: true });
+document.body.appendChild(fileInput);
+
+function matches(o: FormOption, q: string): boolean {
+  if (!q) return true;
+  const hay = `${o.label} ${o.id} ${o.keys ?? ""}`.toLowerCase();
+  return hay.split(/\s+/).some((w) => w.startsWith(q)) || hay.includes(q);
+}
+
+function positionForms(id: string, height = 360) {
+  const el = editor.elementOf(id);
+  const main = $("main").getBoundingClientRect();
+  const r = el?.getBoundingClientRect();
+  if (!r) return;
+  formsEl.style.left = `${Math.max(8, r.left - main.left)}px`;
+  const below = r.bottom - main.top + 6;
+  formsEl.style.top = `${below + height > main.height ? Math.max(8, r.top - main.top - height - 10) : below}px`;
+}
 
 function openForms(id: string, mode: "add" | "turn", query = "") {
   const b = engine.block(id);
   if (!b) return;
   formsMode = mode;
   formsTarget = id;
-  const q = query.toLowerCase();
-  formsShown = FORM_OPTIONS.filter((o) => o.kind !== b.kind || mode === "add").filter((o) => !q || o.label.toLowerCase().startsWith(q) || o.kind.startsWith(q));
-  // A table from a list only makes sense when there's a list (or an empty line to start one).
-  if (mode === "turn" && b.kind !== "table" && listRun(engine.state.blocks, id).length < 2 && b.text.trim()) formsShown = formsShown.filter((o) => o.kind !== "table");
+  formsStage = null;
+  const q = query.toLowerCase().trim();
+  formsShown = FORM_OPTIONS.filter((o) => {
+    if (mode === "turn") {
+      if (o.action) return false;
+      if (o.kind === b.kind && (o.kind !== "heading" || (o.level ?? 1) === (b.level ?? 1))) return false;
+      if (o.id === "toggle") return false;
+      if ((b.kind === "image" || b.kind === "embed") && o.kind !== "paragraph") return false;
+    }
+    return matches(o, q);
+  });
   if (!formsShown.length) return closeForms();
   formsIndex = Math.min(formsIndex, formsShown.length - 1);
   formsEl.innerHTML = "";
-  formsEl.appendChild(h("div", { class: "label" }, mode === "add" ? "Add" : "Turn into"));
+  formsEl.appendChild(h("div", { class: "label menu-title" }, mode === "add" ? "Add" : "Turn into"));
+  let group = "";
   formsShown.forEach((o, i) => {
+    if (o.group !== group) {
+      group = o.group;
+      formsEl.appendChild(h("div", { class: "label menu-group" }, group));
+    }
     const row = h("button", { class: "form-row", role: "option", "aria-selected": String(i === formsIndex) });
     row.append(h("span", { class: "fname" }, o.label), h("span", { class: "meta" }, o.hint));
     row.addEventListener("mousedown", (e) => e.preventDefault());
-    row.onclick = () => applyForm(o.kind);
+    row.onclick = () => chooseForm(o);
     formsEl.appendChild(row);
   });
-  const el = editor.elementOf(id);
-  const main = $("main").getBoundingClientRect();
-  const r = el?.getBoundingClientRect();
-  if (r) {
-    formsEl.style.left = `${r.left - main.left}px`;
-    const below = r.bottom - main.top + 6;
-    formsEl.style.top = `${below + 320 > main.height ? Math.max(8, r.top - main.top - 330) : below}px`;
-  }
+  positionForms(id);
   formsEl.classList.add("open");
+  formsEl.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
 }
 
 function closeForms() {
   formsMode = null;
   formsTarget = null;
   formsIndex = 0;
+  formsStage = null;
   formsEl.classList.remove("open");
 }
 
-function applyForm(kind: (typeof FORM_OPTIONS)[number]["kind"]) {
+/** The line that new things go into: reuse it when it's empty (or just "/query"), else add after it. */
+function placeNew(id: string, block: Block): string | null {
+  const b = engine.block(id);
+  if (!b) return null;
+  const empty = !b.text.trim() || /^\/[\w -]*$/.test(b.text);
+  const ops: Op[] = [{ t: "insert", block, after: id }];
+  if (empty && b.kind !== "heading" && !ISLAND_KINDS.includes(b.kind)) ops.push({ t: "delete", id });
+  const txId = newId("tx");
+  const out = engine.commit({ id: txId, actor: "user", label: `Add ${block.kind}`, ops });
+  if (!out.ok) {
+    toast("That changed since. Try again.");
+    return null;
+  }
+  render();
+  return txId;
+}
+
+function chooseForm(o: FormOption) {
+  if (o.action) return startMedia(o.action);
   const id = formsTarget;
   const mode = formsMode;
   closeForms();
-  if (!id) return;
-  let b = engine.block(id);
+  if (!id || !o.kind) return;
+  const b = engine.block(id);
   if (!b) return;
   if (mode === "add" && b.text.startsWith("/")) {
     // The "/query" was a command, not words.
     engine.commit({ id: newId("tx"), actor: "user", label: "Add", ops: [{ t: "update", id, patch: { text: "" } }] });
-    b = engine.block(id)!;
   }
-  const conv = turnIntoOps(engine.state.blocks, id, kind);
-  if (!conv.ops.length) return;
+  turnInto(id, o.kind, o.level, o.id === "toggle");
+}
+
+function turnInto(id: string, kind: Block["kind"], level?: 1 | 2, collapsible = false) {
+  const conv = turnIntoOps(engine.state.blocks, id, kind, level);
+  if (!conv.ops.length) {
+    if (conv.label) toast(conv.label, undefined, 6000);
+    return;
+  }
   const txId = newId("tx");
   const out = engine.commit({ id: txId, actor: "user", label: conv.label || "Turn into", ops: conv.ops });
   if (!out.ok) return toast("That changed since. Try again.");
+  if (collapsible) toast("Toggle: click the arrow beside it to fold what's under it.", undefined, 5000);
   render();
   if (conv.focus) {
     const fb = engine.block(conv.focus);
-    if (fb?.kind === "table") {
-      requestAnimationFrame(() => (editor.elementOf(conv.focus!)?.querySelector("td,th") as HTMLElement | null)?.focus());
-    } else if (fb) editor.setCaret(fb.id, fb.text.length);
+    const island = editor.elementOf(conv.focus)?.querySelector<HTMLElement>("td,th,[data-step],[data-when]");
+    if (fb && ISLAND_KINDS.includes(fb.kind)) requestAnimationFrame(() => island?.focus());
+    else if (fb) editor.setCaret(fb.id, fb.text.length);
   }
   if (conv.label) toast(conv.label, { label: "Undo", run: () => void (engine.undo(txId), render()) });
 }
 
+// ---- Media: one question, answered inside the menu
+
+function startMedia(action: MediaAction) {
+  const id = formsTarget;
+  if (!id) return;
+  if (action === "upload") {
+    const target = id;
+    closeForms();
+    fileInput.onchange = async () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = "";
+      if (file) await insertImageFile(target, file);
+    };
+    fileInput.click();
+    return;
+  }
+  formsStage = { action };
+  const prompt = { "find-image": "Search openly licensed photos", "generate-image": "Describe the image", embed: "Paste a YouTube, Loom or Figma link" }[action as "embed"];
+  formsEl.innerHTML = "";
+  formsEl.appendChild(h("div", { class: "label menu-title" }, { "find-image": "Find a photo", "generate-image": "Generate image", embed: "Video or embed" }[action as "embed"]));
+  const input = h("input", { class: "menu-input", placeholder: prompt, "aria-label": prompt });
+  const results = h("div", { class: "menu-results" });
+  formsEl.append(input, results);
+  positionForms(id, 380);
+  requestAnimationFrame(() => input.focus());
+  input.addEventListener("keydown", async (e) => {
+    e.stopPropagation();
+    if (e.key === "Escape") return closeForms();
+    if (e.key !== "Enter" || !input.value.trim() || formsStage?.busy) return;
+    e.preventDefault();
+    const value = input.value.trim();
+    if (action === "embed") {
+      closeForms();
+      return void insertEmbed(id, value);
+    }
+    formsStage = { action, busy: true };
+    results.textContent = action === "find-image" ? "Searching…" : "Generating… this takes a few seconds";
+    results.className = "menu-results label";
+    try {
+      if (action === "find-image") {
+        const found = await host.findImages(value);
+        results.className = "menu-results grid";
+        results.textContent = "";
+        if (!found.length) results.appendChild(h("div", { class: "label" }, "Nothing found. Try other words."));
+        for (const img of found.slice(0, 9)) {
+          const pick = h("button", { class: "thumb", title: img.credit });
+          pick.appendChild(Object.assign(document.createElement("img"), { src: img.thumb, alt: img.title, loading: "lazy" }));
+          pick.addEventListener("mousedown", (ev) => ev.preventDefault());
+          pick.onclick = () => {
+            closeForms();
+            const nid = newId("b");
+            placeNew(id, { id: nid, kind: "image", text: img.title, wet: false, rev: 0, origin: "typed", media: { src: img.url, alt: img.title, credit: img.credit, creditUrl: img.creditUrl, via: "web" } });
+          };
+          results.appendChild(pick);
+        }
+      } else {
+        const out = await host.generateImage(value);
+        closeForms();
+        placeNew(id, { id: newId("b"), kind: "image", text: value, wet: false, rev: 0, origin: "typed", media: { src: out.dataUrl, alt: value, via: "generated" } });
+      }
+    } catch (err) {
+      results.className = "menu-results label";
+      results.textContent = err instanceof Error ? err.message.replace(/^.*?:\s*/, "") : "That didn't work.";
+    } finally {
+      if (formsStage) formsStage.busy = false;
+    }
+  });
+}
+
+async function insertImageFile(id: string, file: File | Blob, name = "Image") {
+  const dataUrl = await downscale(file);
+  placeNew(id, { id: newId("b"), kind: "image", text: "", wet: false, rev: 0, origin: "typed", media: { src: dataUrl, alt: name, via: "upload" } });
+}
+
+function insertEmbed(id: string, url: string) {
+  if (!/^https?:\/\//i.test(url)) return toast("That isn't a link.");
+  placeNew(id, { id: newId("b"), kind: "embed", text: url, url, wet: false, rev: 0, origin: "typed" });
+}
+
+/** Keep drafts light: images over 1600px are scaled down before they're stored. */
+function downscale(file: File | Blob, max = 1600): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => {
+      const src = String(reader.result);
+      const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height));
+        if (k === 1 && src.length < 1_500_000) return resolve(src);
+        const c = document.createElement("canvas");
+        c.width = Math.round(img.width * k);
+        c.height = Math.round(img.height * k);
+        c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL("image/jpeg", 0.86));
+      };
+      img.onerror = () => resolve(src);
+      img.src = src;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function formsKey(e: KeyboardEvent): boolean {
-  if (!formsMode) return false;
+  if (!formsMode || formsStage) return false;
   if (e.key === "ArrowDown" || e.key === "ArrowUp") {
     e.preventDefault();
     formsIndex = (formsIndex + (e.key === "ArrowDown" ? 1 : -1) + formsShown.length) % formsShown.length;
@@ -985,7 +1211,7 @@ function formsKey(e: KeyboardEvent): boolean {
   if (e.key === "Enter") {
     e.preventDefault();
     const o = formsShown[formsIndex];
-    if (o) applyForm(o.kind);
+    if (o) chooseForm(o);
     return true;
   }
   if (e.key === "Escape") {
@@ -998,13 +1224,56 @@ function formsKey(e: KeyboardEvent): boolean {
 
 docEl.addEventListener("contextmenu", (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>(".blk");
-  if (!el?.dataset.id || (e.target as HTMLElement).closest("td,th")) return;
+  if (!el?.dataset.id || (e.target as HTMLElement).closest("td,th,[data-step],[data-when]")) return;
   e.preventDefault();
   formsIndex = 0;
   openForms(el.dataset.id, "turn");
 });
 document.addEventListener("mousedown", (e) => {
-  if (formsMode && !formsEl.contains(e.target as Node)) closeForms();
+  if (formsMode && !formsEl.contains(e.target as Node) && !(e.target as HTMLElement).closest?.(".add-handle")) closeForms();
+});
+
+// ---- The + beside the line you're hovering: Add after it
+
+const addHandle = h("button", { class: "add-handle", "aria-label": "Add", title: "Add (or type / on a new line)" }, "+");
+$("page").appendChild(addHandle);
+let addFor: string | null = null;
+docEl.addEventListener("mousemove", (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>(".blk");
+  if (!el?.dataset.id || talking) return;
+  addFor = el.dataset.id;
+  const page = $("page").getBoundingClientRect();
+  const r = el.getBoundingClientRect();
+  addHandle.style.top = `${r.top - page.top + (el.dataset.kind === "heading" ? 24 : 0)}px`;
+  addHandle.classList.add("show");
+});
+$("page").addEventListener("mouseleave", () => addHandle.classList.remove("show"));
+addHandle.addEventListener("mousedown", (e) => e.preventDefault());
+addHandle.addEventListener("click", () => {
+  if (!addFor) return;
+  // + is a shortcut for "/" on a new line: same menu, and typing filters it.
+  const nid = newId("b");
+  const out = engine.commit({ id: newId("tx"), actor: "user", label: "Add", noHistory: true, ops: [{ t: "insert", block: { id: nid, kind: "paragraph", text: "/", wet: true, rev: 0, origin: "typed" }, after: addFor }] });
+  if (!out.ok) return;
+  render();
+  docEl.focus();
+  editor.setCaret(nid, 1);
+  formsIndex = 0;
+  openForms(nid, "add");
+});
+
+// ---- Drop an image file anywhere on the page
+
+docEl.addEventListener("dragover", (e) => {
+  if (Array.from(e.dataTransfer?.items ?? []).some((i) => i.type.startsWith("image/"))) e.preventDefault();
+});
+docEl.addEventListener("drop", (e) => {
+  const file = Array.from(e.dataTransfer?.files ?? []).find((f) => f.type.startsWith("image/"));
+  if (!file) return;
+  e.preventDefault();
+  const el = (e.target as HTMLElement).closest<HTMLElement>(".blk") ?? editor.elementOf(engine.state.blocks.filter(inPage).at(-1)?.id ?? "");
+  const id = el?.dataset.id;
+  if (id) void insertImageFile(id, file, file.name);
 });
 
 // ============================================================================ undo

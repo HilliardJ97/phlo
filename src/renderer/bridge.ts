@@ -69,4 +69,6 @@ export const host = {
   getSettings: () => call<HostSettings>("getSettings"),
   setSettings: (p: Record<string, string>) => call<HostSettings>("setSettings", p),
   transcribe: (audioBase64: string, mime: string) => call<{ text: string }>("transcribe", audioBase64, mime),
+  findImages: (query: string) => call<{ url: string; thumb: string; title: string; credit: string; creditUrl: string }[]>("findImages", query),
+  generateImage: (prompt: string) => call<{ dataUrl: string }>("generateImage", prompt),
 };

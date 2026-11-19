@@ -271,6 +271,55 @@ export class HostApi {
     return this.getSettings();
   }
 
+  // ---- images ------------------------------------------------------------------
+
+  /** Openly licensed photos from Openverse (no key). Every result carries its credit. */
+  async findImages(query: string): Promise<{ url: string; thumb: string; title: string; credit: string; creditUrl: string }[]> {
+    const q = String(query).slice(0, 120).trim();
+    if (!q) return [];
+    const res = await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=12&mature=false`, {
+      headers: { "user-agent": "Phlo/0.1 (+local app)" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) throw new Error(`Photo search is unavailable right now (${res.status}).`);
+    const json = (await res.json()) as { results?: { url: string; thumbnail?: string; title?: string; creator?: string; license?: string; license_version?: string; foreign_landing_url?: string }[] };
+    return (json.results ?? [])
+      .filter((r) => /^https:\/\//.test(r.url))
+      .map((r) => ({
+        url: r.url,
+        thumb: r.thumbnail || r.url,
+        title: (r.title || q).slice(0, 120),
+        credit: `${r.creator ? `${r.creator} · ` : ""}CC ${String(r.license ?? "").toUpperCase()} ${r.license_version ?? ""} · Openverse`.replace(/\s+/g, " ").trim(),
+        creditUrl: r.foreign_landing_url || r.url,
+      }));
+  }
+
+  /** Generate one image through OpenRouter (the backup cloud model's key). */
+  async generateImage(prompt: string): Promise<{ dataUrl: string }> {
+    const p = String(prompt).slice(0, 2000).trim();
+    if (!p) throw new Error("Describe the image first.");
+    const s = this.settings;
+    const base = /openrouter\.ai/.test(s.compatBaseUrl) ? s.compatBaseUrl.replace(/\/+$/, "") : "https://openrouter.ai/api/v1";
+    const key = (/openrouter\.ai/.test(s.compatBaseUrl) ? this.compatKey() : undefined) ?? this.env.OPENROUTER_API_KEY ?? "proxy-injected";
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        model: this.env.PHLO_IMAGE_MODEL || "google/gemini-3.1-flash-image",
+        modalities: ["image", "text"],
+        messages: [{ role: "user", content: `Create one image for a working document. Clean, modern, no text unless asked. ${p}` }],
+      }),
+      signal: AbortSignal.timeout(90_000),
+    });
+    if (res.status === 401 || res.status === 403) throw new Error("Image generation needs an OpenRouter key: Your AI → Backup cloud model.");
+    if (res.status === 402) throw new Error("Your OpenRouter credit has run out. Add credit, then try again.");
+    if (!res.ok) throw new Error(`Image generation failed (${res.status}).`);
+    const json = (await res.json()) as { choices?: { message?: { images?: { image_url?: { url?: string } }[] } }[] };
+    const url = json.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+    if (!url || !/^data:image\//.test(url)) throw new Error("The model didn't return an image. Try a different description.");
+    return { dataUrl: url };
+  }
+
   // ---- speech ------------------------------------------------------------------
 
   /**
@@ -313,6 +362,8 @@ export const HOST_METHODS = [
   "getSettings",
   "setSettings",
   "transcribe",
+  "findImages",
+  "generateImage",
 ] as const;
 
 export type HostMethod = (typeof HOST_METHODS)[number];

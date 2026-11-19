@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DocEngine } from "../src/engine/engine";
 import { emptyDraft, type Block } from "../src/engine/model";
-import { listRun, listToTable, splitItem, suggestForm, tableToItems, turnIntoOps } from "../src/engine/forms";
+import { chartFromItems, chartFromTable, listRun, listToTable, parseNumber, splitItem, suggestForm, tableToItems, turnIntoOps } from "../src/engine/forms";
 import { buildRequest, compilePlan, spanEdit } from "../src/engine/settle";
 import { localPlan } from "../src/engine/local";
 import { withCorrectionTarget } from "../src/engine/settle";
@@ -115,5 +115,64 @@ describe("Turn into", () => {
     e.commit({ id: "t", actor: "user", label: "x", ops: t.ops });
     expect(e.block("p")).toMatchObject({ kind: "decision", text: "We should win on flow." });
     expect(tableToItems(listToTable([b("x", "bullet", "solo")]))).toEqual(["solo"]);
+  });
+});
+
+describe("charts, timelines, columns, headings", () => {
+  const mk = (ops: { id: string; kind: Block["kind"]; text: string }[]) => {
+    const e = new DocEngine(emptyDraft("c"));
+    let after: string | null = null;
+    e.commit({ id: "s", actor: "user", label: "s", ops: ops.map((o) => { const op = { t: "insert" as const, block: b(o.id, o.kind, o.text), after }; after = o.id; return op; }) });
+    return e;
+  };
+
+  it("numbers parse the way people say and write them", () => {
+    expect(parseNumber("$1,200")).toBe(1200);
+    expect(parseNumber("12%")).toBe(12);
+    expect(parseNumber("1.5k signups")).toBe(1500);
+    expect(parseNumber("two hundred")).toBe(200);
+    expect(parseNumber("cloud only")).toBeNull();
+  });
+
+  it("dated items become a line chart; categories become bars; a table's number column charts", () => {
+    const e = mk([{ id: "a", kind: "bullet", text: "Jan: 120" }, { id: "c", kind: "bullet", text: "Feb: 180" }, { id: "d", kind: "bullet", text: "Mar: 260" }]);
+    const t = turnIntoOps(e.state.blocks, "a", "chart");
+    e.commit({ id: "t", actor: "user", label: t.label, ops: t.ops });
+    expect(e.state.blocks[0].chart).toMatchObject({ type: "line", labels: ["Jan", "Feb", "Mar"], series: [{ values: [120, 180, 260] }] });
+    expect(chartFromItems(["Notion: $10", "Granola: $14"])).toMatchObject({ type: "bar", unit: "$" });
+    expect(chartFromTable({ columns: ["Tool", "Price", "Notes"], rows: [["Notion", "$10", "cloud"], ["Granola", "$14", "meetings"]] })).toMatchObject({ type: "bar", series: [{ name: "Price", values: [10, 14] }] });
+    expect(chartFromItems(["3, 5, 5, 6, 7, 8, 8, 9, 12"])).toMatchObject({ type: "histogram" });
+    expect(chartFromItems(["just words", "more words"])).toBeNull();
+  });
+
+  it("no numbers, no chart: Phlo says why instead of inventing data", () => {
+    const e = mk([{ id: "a", kind: "bullet", text: "Fast" }, { id: "c", kind: "bullet", text: "Private" }]);
+    const t = turnIntoOps(e.state.blocks, "a", "chart");
+    expect(t.ops).toHaveLength(0);
+    expect(t.label).toMatch(/real numbers/);
+  });
+
+  it("timeline keeps dates and words; columns side by side; both turn back into lines", () => {
+    const e = mk([{ id: "a", kind: "bullet", text: "Q1: private beta" }, { id: "c", kind: "bullet", text: "Q2: launch for PMs" }]);
+    const t = turnIntoOps(e.state.blocks, "a", "timeline");
+    e.commit({ id: "t", actor: "user", label: t.label, ops: t.ops });
+    const tl = e.state.blocks[0];
+    expect([tl.when, tl.steps]).toEqual([["Q1", "Q2"], ["private beta", "launch for PMs"]]);
+    const back = turnIntoOps(e.state.blocks, tl.id, "bullet");
+    e.commit({ id: "u", actor: "user", label: back.label, ops: back.ops });
+    expect(e.state.blocks.map((x) => x.text)).toEqual(["Q1: private beta", "Q2: launch for PMs"]);
+    const c = turnIntoOps(e.state.blocks, e.state.blocks[0].id, "columns");
+    e.commit({ id: "v", actor: "user", label: c.label, ops: c.ops });
+    expect(e.state.blocks[0]).toMatchObject({ kind: "columns", steps: ["Q1: private beta", "Q2: launch for PMs"] });
+  });
+
+  it("subheadings are headings with a level", () => {
+    const e = mk([{ id: "p", kind: "paragraph", text: "Pricing" }]);
+    const t = turnIntoOps(e.state.blocks, "p", "heading", 2);
+    e.commit({ id: "t", actor: "user", label: "x", ops: t.ops });
+    expect(e.block("p")).toMatchObject({ kind: "heading", level: 2 });
+    const u = turnIntoOps(e.state.blocks, "p", "heading", 1);
+    e.commit({ id: "u", actor: "user", label: "x", ops: u.ops });
+    expect(e.block("p")!.level).toBe(1);
   });
 });

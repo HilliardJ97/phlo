@@ -22,7 +22,37 @@ export type BlockKind =
   | "idea"
   | "callout"
   | "table"
-  | "flow";
+  | "flow"
+  | "timeline"
+  | "columns"
+  | "chart"
+  | "image"
+  | "embed";
+
+/** Forms whose meaning lives in structured fields; the page shows them as islands, not editable text. */
+export const ISLAND_KINDS: BlockKind[] = ["table", "flow", "timeline", "columns", "chart", "image", "embed"];
+
+export type ChartType = "bar" | "line" | "histogram";
+
+/** A chart needs real values; unit and source are kept and shown. */
+export interface ChartData {
+  type: ChartType;
+  labels: string[];
+  series: { name: string; values: number[] }[];
+  unit?: string;
+  source?: string;
+}
+
+export interface MediaData {
+  /** data: URL (pasted/uploaded/generated) or https URL. */
+  src: string;
+  alt?: string;
+  /** Attribution for web images ("Photo by X · CC BY 2.0 · Openverse"). */
+  credit?: string;
+  creditUrl?: string;
+  /** How it got here, so the page can say so. */
+  via?: "upload" | "web" | "generated" | "link";
+}
 
 /** Thinking forms carry a mono label; they're how Phlo models thinking, not formatting. */
 export const FORM_LABEL: Partial<Record<BlockKind, string>> = {
@@ -62,8 +92,18 @@ export interface Block {
   sources?: string[];
   /** Structured meaning for non-text forms (tables). Text forms leave it unset. */
   data?: TableData;
-  /** A flow's steps, in order. */
+  /** A flow's / columns' / timeline's items, in order. */
   steps?: string[];
+  /** Timeline: the date or phase label for each step. */
+  when?: string[];
+  /** Heading level: 1 = section, 2 = subheading. */
+  level?: 1 | 2;
+  /** A collapsed heading hides its content: Phlo's toggle. */
+  collapsed?: boolean;
+  chart?: ChartData;
+  media?: MediaData;
+  /** Embeds: the page being embedded (YouTube, Loom, Figma…). */
+  url?: string;
 }
 
 export type Role = "partner" | "scribe";

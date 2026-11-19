@@ -11,7 +11,7 @@
 import type { DocEngine, Op } from "../../engine/engine";
 import { newId } from "../../engine/ids";
 import { flowSummary, tableSummary } from "../../engine/forms";
-import { FORM_LABEL, type Block, type Draft, type TableData } from "../../engine/model";
+import { FORM_LABEL, ISLAND_KINDS, type Block, type ChartData, type Draft, type TableData } from "../../engine/model";
 
 export interface EditorCallbacks {
   /** Enter on an empty wet line: the paragraph is finished. */
@@ -25,6 +25,12 @@ export interface EditorCallbacks {
   onSlash?(id: string | null, query: string): void;
   /** Lets an open menu claim arrow/enter/escape keys. Return true if handled. */
   onMenuKey?(e: KeyboardEvent): boolean;
+  /** Fold or unfold a heading's content (Phlo's toggle). */
+  onFold?(id: string): void;
+  /** An island asked to become another form (e.g. a chart's "Edit as table"). */
+  onTurnInto?(id: string, kind: Block["kind"]): void;
+  /** The + beside a line: open Add after it. */
+  onAddAfter?(id: string): void;
 }
 
 /** Motion comes from the tokens, never from component code. */
@@ -82,15 +88,25 @@ export class Editor {
     root.addEventListener(
       "input",
       (e) => {
-        const cell = (e.target as HTMLElement)?.closest?.("td,th,[data-step]") as HTMLElement | null;
+        const cell = (e.target as HTMLElement)?.closest?.("td,th,[data-step],[data-when]") as HTMLElement | null;
         if (cell) {
           e.stopImmediatePropagation();
           if (cell.dataset.step !== undefined) this.onStepInput(cell);
+          else if (cell.dataset.when !== undefined) this.onWhenInput(cell);
           else this.onCellInput(cell);
         }
       },
       true,
     );
+    root.addEventListener("mousedown", (e) => {
+      const t = e.target as HTMLElement;
+      const fold = t.closest?.(".fold") as HTMLElement | null;
+      if (fold) {
+        e.preventDefault();
+        const id = fold.closest<HTMLElement>(".blk")?.dataset.id;
+        if (id) this.cb.onFold?.(id);
+      }
+    });
     root.addEventListener("input", () => {
       if (this.composing) return;
       this.syncFromDom();
@@ -180,11 +196,16 @@ export class Editor {
     const caretSave = focusedId ? this.caret() : null;
     const seen = new Set<string>();
     let num = 0;
+    let sub = 0;
     let step = 0;
+    let foldLevel = 0;
     let prev: HTMLElement | null = null;
     for (const b of draft.blocks) {
       if (!inPage(b)) continue;
       step = b.kind === "numbered" ? step + 1 : 0;
+      const lvl = b.kind === "heading" ? (b.level ?? 1) : 0;
+      if (lvl && foldLevel && lvl <= foldLevel) foldLevel = 0;
+      const hidden = foldLevel > 0;
       seen.add(b.id);
       let el = this.els.get(b.id);
       if (!el) {
@@ -193,9 +214,23 @@ export class Editor {
         el.dataset.id = b.id;
         this.els.set(b.id, el);
       }
-      if (b.kind === "heading" && !NEXT.test(b.text)) num++;
+      let label: string | undefined;
+      if (b.kind === "heading" && !NEXT.test(b.text)) {
+        if (lvl === 1) {
+          num++;
+          sub = 0;
+          label = `${String(num).padStart(2, "0")} · ${b.text}`;
+        } else {
+          sub++;
+          label = `${String(Math.max(num, 1)).padStart(2, "0")}.${sub} · ${b.text}`;
+        }
+      } else if (b.kind === "heading") label = "";
+      if (b.kind === "heading" && b.collapsed && !hidden) foldLevel = lvl;
       setAttr(el, "data-n", b.kind === "numbered" ? String(step) : undefined);
-      this.paint(el, b, num, opts.dim?.has(b.id) ?? false);
+      setAttr(el, "data-hidden", hidden ? "1" : undefined);
+      setAttr(el, "data-level", lvl === 2 ? "2" : undefined);
+      setAttr(el, "data-collapsed", b.kind === "heading" && b.collapsed ? "1" : undefined);
+      this.paint(el, b, label, opts.dim?.has(b.id) ?? false);
       let want: ChildNode | null = prev ? prev.nextSibling : this.root.firstChild;
       // Interface elements (live words, PHLO ASKS) may sit between blocks: step over them.
       while (want && want !== el && want instanceof HTMLElement && want.dataset.ui) want = want.nextSibling;
@@ -282,47 +317,70 @@ export class Editor {
 
   // ------------------------------------------------------------------ flows
 
-  /** A flow: steps as cards in reading order, arrows between, each step editable in place. */
+  /**
+   * Flow, columns and timeline share one shape (ordered items): cards with arrows
+   * (flow), cards side by side (columns), or dated moments on a line (timeline).
+   * Every item is editable in place.
+   */
   private paintFlow(el: HTMLElement, b: Block) {
     el.contentEditable = "false";
+    const variant = b.kind as "flow" | "columns" | "timeline";
     const steps = b.steps?.length ? b.steps : [""];
-    const sig = JSON.stringify([steps, b.trail?.at(-1) ?? ""]);
+    const when = b.when ?? [];
+    const sig = JSON.stringify([variant, steps, when, b.trail?.at(-1) ?? ""]);
     if (el.dataset.sig === sig) return;
     const active = document.activeElement as HTMLElement | null;
-    const focusAt = active && el.contains(active) ? active.dataset.step : undefined;
+    const focusAt = active && el.contains(active) ? (active.dataset.step ?? undefined) : undefined;
     el.dataset.sig = sig;
     el.textContent = "";
     const row = document.createElement("div");
-    row.className = "flow";
+    row.className = variant === "flow" ? "flow" : variant === "columns" ? "cols" : "timeline";
     row.setAttribute("role", "list");
+    row.style.setProperty("--n", String(steps.length));
     steps.forEach((text, i) => {
-      if (i) {
+      if (i && variant === "flow") {
         const arrow = document.createElement("span");
         arrow.className = "flow-arrow";
         arrow.setAttribute("aria-hidden", "true");
         row.appendChild(arrow);
       }
       const card = document.createElement("div");
-      card.className = "flow-step";
+      card.className = variant === "timeline" ? "moment" : "flow-step";
       card.setAttribute("role", "listitem");
-      const n = document.createElement("span");
-      n.className = "flow-n";
-      n.textContent = String(i + 1).padStart(2, "0");
+      if (variant === "flow") {
+        const n = document.createElement("span");
+        n.className = "flow-n";
+        n.textContent = String(i + 1).padStart(2, "0");
+        card.appendChild(n);
+      }
+      if (variant === "timeline") {
+        const w = document.createElement("div");
+        w.className = "moment-when";
+        w.contentEditable = "true";
+        w.dataset.when = String(i);
+        w.dataset.placeholder = "When";
+        w.textContent = when[i] ?? "";
+        const dot = document.createElement("span");
+        dot.className = "moment-dot";
+        dot.setAttribute("aria-hidden", "true");
+        card.append(w, dot);
+      }
       const t = document.createElement("div");
       t.className = "flow-text";
       t.contentEditable = "true";
       t.dataset.step = String(i);
       t.textContent = text;
-      card.append(n, t);
+      card.appendChild(t);
       row.appendChild(card);
     });
     const tools = document.createElement("div");
     tools.className = "tbl-tools";
     const add = document.createElement("button");
     add.className = "label";
-    add.textContent = "+ Step";
+    add.textContent = variant === "flow" ? "+ Step" : variant === "columns" ? "+ Column" : "+ Moment";
     add.addEventListener("mousedown", (e) => e.preventDefault());
     add.addEventListener("click", () => {
+      if (variant === "columns" && steps.length >= 4) return;
       this.updateFlow(b.id, (st) => [...st, ""]);
       requestAnimationFrame(() => this.focusStep(b.id, steps.length));
     });
@@ -339,6 +397,121 @@ export class Editor {
     if (focusAt !== undefined) this.focusStep(b.id, Number(focusAt));
   }
 
+  // ------------------------------------------------------------------ charts
+
+  /** Charts are drawn from data with tokens: idea colors only, hairlines, mono labels. */
+  private paintChart(el: HTMLElement, b: Block) {
+    el.contentEditable = "false";
+    const c = b.chart;
+    const sig = JSON.stringify(c ?? null);
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.textContent = "";
+    if (!c) return;
+    const fig = document.createElement("figure");
+    fig.className = "chart";
+    fig.innerHTML = renderChartSvg(c);
+    const cap = document.createElement("figcaption");
+    cap.className = "chart-cap";
+    const meta = document.createElement("span");
+    meta.className = "label";
+    meta.textContent = [`${c.type} chart`, c.series.length > 1 ? c.series.map((x) => x.name).join(" · ") : "", c.unit ?? "", c.source ? `Source: ${c.source}` : "No source yet"].filter(Boolean).join(" · ");
+    cap.appendChild(meta);
+    const tools = document.createElement("span");
+    tools.className = "chart-tools";
+    for (const [label, kind] of [["Edit as table", "table"]] as const) {
+      const btn = document.createElement("button");
+      btn.className = "label";
+      btn.textContent = label;
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => this.cb.onTurnInto?.(b.id, kind));
+      tools.appendChild(btn);
+    }
+    for (const t of ["bar", "line", "histogram"] as const) {
+      if (t === c.type || (t === "histogram") !== (c.type === "histogram")) continue;
+      const btn = document.createElement("button");
+      btn.className = "label";
+      btn.textContent = t === "bar" ? "Bars" : "Line";
+      btn.addEventListener("mousedown", (e) => e.preventDefault());
+      btn.addEventListener("click", () => this.commit([{ t: "update", id: b.id, patch: { chart: { ...c, type: t } } }], "Chart type"));
+      tools.appendChild(btn);
+    }
+    cap.appendChild(tools);
+    fig.appendChild(cap);
+    el.appendChild(fig);
+  }
+
+  // ------------------------------------------------------------------ media
+
+  private paintImage(el: HTMLElement, b: Block) {
+    el.contentEditable = "false";
+    const m = b.media;
+    const sig = JSON.stringify([m?.src?.slice(0, 64), m?.src?.length, m?.credit, b.text]);
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.textContent = "";
+    if (!m) return;
+    const fig = document.createElement("figure");
+    fig.className = "media";
+    const img = document.createElement("img");
+    img.src = m.src;
+    img.alt = m.alt ?? b.text ?? "";
+    img.loading = "lazy";
+    img.decoding = "async";
+    fig.appendChild(img);
+    const cap = document.createElement("figcaption");
+    const words = document.createElement("span");
+    words.className = "media-caption";
+    words.textContent = b.text && !/^Image ·/.test(b.text) ? b.text : "";
+    cap.appendChild(words);
+    const credit = document.createElement("span");
+    credit.className = "label";
+    if (m.via === "generated") credit.textContent = "Generated";
+    else if (m.credit) {
+      if (m.creditUrl) {
+        const a = document.createElement("a");
+        a.href = m.creditUrl;
+        a.target = "_blank";
+        a.rel = "noreferrer";
+        a.textContent = m.credit;
+        credit.appendChild(a);
+      } else credit.textContent = m.credit;
+    }
+    cap.appendChild(credit);
+    fig.appendChild(cap);
+    el.appendChild(fig);
+  }
+
+  private paintEmbed(el: HTMLElement, b: Block) {
+    el.contentEditable = "false";
+    const sig = JSON.stringify([b.url]);
+    if (el.dataset.sig === sig) return;
+    el.dataset.sig = sig;
+    el.textContent = "";
+    if (!b.url) return;
+    const src = embedSrc(b.url);
+    if (src) {
+      const box = document.createElement("div");
+      box.className = "embed";
+      const frame = document.createElement("iframe");
+      frame.src = src;
+      frame.title = b.text || "Embedded video";
+      frame.loading = "lazy";
+      frame.allow = "accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen";
+      frame.referrerPolicy = "strict-origin-when-cross-origin";
+      frame.setAttribute("sandbox", "allow-scripts allow-same-origin allow-presentation allow-popups");
+      box.appendChild(frame);
+      el.appendChild(box);
+    }
+    const cap = document.createElement("a");
+    cap.className = "label embed-link";
+    cap.href = b.url;
+    cap.target = "_blank";
+    cap.rel = "noreferrer";
+    cap.textContent = src ? hostOf(b.url) : `${hostOf(b.url)} · Open`;
+    el.appendChild(cap);
+  }
+
   private focusStep(id: string, i: number) {
     const s = this.els.get(id)?.querySelector<HTMLElement>(`[data-step="${i}"]`);
     if (s) placeCaretEnd(s);
@@ -349,7 +522,9 @@ export class Editor {
     const b = this.engine().block(id);
     if (!b?.steps) return;
     const steps = fn([...b.steps]);
-    this.commit([{ t: "update", id, patch: { steps, text: flowSummary(steps) } }], "Edit flow", coalesce);
+    const when = b.kind === "timeline" ? steps.map((_, i) => b.when?.[i] ?? "") : undefined;
+    const text = b.kind === "columns" ? `Columns · ${steps.join(" | ")}` : b.kind === "timeline" ? `Timeline · ${steps.map((st, i) => `${when![i] ? `${when![i]}: ` : ""}${st}`).join(" · ")}` : flowSummary(steps);
+    this.commit([{ t: "update", id, patch: { steps, text, ...(when ? { when } : {}) } }], "Edit flow", coalesce);
   }
 
   private onStepInput(cell: HTMLElement) {
@@ -363,11 +538,23 @@ export class Editor {
       id,
       (st) => {
         st[i] = text;
-        el.dataset.sig = JSON.stringify([st, b0?.trail?.at(-1) ?? ""]);
+        el.dataset.sig = JSON.stringify([b0?.kind, st, b0?.when ?? [], b0?.trail?.at(-1) ?? ""]);
         return st;
       },
       `step:${id}:${i}`,
     );
+  }
+
+  private onWhenInput(cell: HTMLElement) {
+    const el = cell.closest<HTMLElement>(".blk");
+    const id = el?.dataset.id;
+    const b = id ? this.engine().block(id) : undefined;
+    if (!el || !id || !b?.steps) return;
+    const i = Number(cell.dataset.when);
+    const when = [...(b.when ?? b.steps.map(() => ""))];
+    when[i] = (cell.textContent ?? "").replace(/\n/g, " ");
+    el.dataset.sig = JSON.stringify([b.kind, b.steps, when, b.trail?.at(-1) ?? ""]);
+    this.commit([{ t: "update", id, patch: { when, text: `Timeline · ${b.steps.map((st, k) => `${when[k] ? `${when[k]}: ` : ""}${st}`).join(" · ")}` } }], "Edit timeline", `when:${id}:${i}`);
   }
 
   private flowKey(e: KeyboardEvent, cell: HTMLElement): boolean {
@@ -460,13 +647,13 @@ export class Editor {
     } else this.cb.onSlash?.(null, "");
   }
 
-  private paint(el: HTMLElement, b: Block, num: number, dim: boolean) {
+  private paint(el: HTMLElement, b: Block, label: string | undefined, dim: boolean) {
     el.dataset.kind = b.kind;
     el.classList.toggle("wet", b.wet);
     setAttr(el, "data-theme", b.kind === "heading" ? b.theme : undefined);
     setAttr(el, "data-tab", b.tab);
     const isNext = b.kind === "heading" && NEXT.test(b.text);
-    setAttr(el, "data-label", b.kind === "heading" ? (isNext ? "" : `${String(num).padStart(2, "0")} · ${b.text}`) : undefined);
+    setAttr(el, "data-label", b.kind === "heading" ? (isNext ? "" : (label ?? "")) : undefined);
     el.classList.toggle("next", isNext);
     setAttr(el, "data-dim", dim ? "1" : undefined);
     el.style.setProperty("--depth", String(b.depth ?? 0));
@@ -478,8 +665,20 @@ export class Editor {
       this.paintTable(el, b);
       return;
     }
-    if (b.kind === "flow") {
+    if (b.kind === "flow" || b.kind === "columns" || b.kind === "timeline") {
       this.paintFlow(el, b);
+      return;
+    }
+    if (b.kind === "chart") {
+      this.paintChart(el, b);
+      return;
+    }
+    if (b.kind === "image") {
+      this.paintImage(el, b);
+      return;
+    }
+    if (b.kind === "embed") {
+      this.paintEmbed(el, b);
       return;
     }
     if (el.dataset.sig !== undefined) {
@@ -502,6 +701,21 @@ export class Editor {
     } else {
       el.querySelectorAll(":scope > br").forEach((br) => br.remove());
     }
+
+    // Every heading can fold what's under it: Phlo's toggle.
+    let fold = el.querySelector<HTMLElement>(":scope > .fold");
+    if (b.kind === "heading" && !NEXT.test(b.text)) {
+      if (!fold) {
+        fold = document.createElement("span");
+        fold.className = "fold";
+        fold.dataset.ui = "1";
+        fold.contentEditable = "false";
+        fold.setAttribute("role", "button");
+        fold.title = "Fold";
+        el.appendChild(fold);
+      }
+      fold.setAttribute("aria-expanded", String(!b.collapsed));
+    } else fold?.remove();
 
     const trail = el.querySelector<HTMLElement>(":scope > .trail");
     if (b.trail?.length) {
@@ -567,7 +781,7 @@ export class Editor {
         const id = n.dataset.id;
         domIds.add(id);
         const b = model.get(id)!;
-        if (b.kind === "table" || b.kind === "flow") {
+        if (ISLAND_KINDS.includes(b.kind)) {
           prevId = id;
           continue;
         }
@@ -612,9 +826,9 @@ export class Editor {
   private onKeyDown(e: KeyboardEvent) {
     if (e.isComposing) return;
     if (this.cb.onMenuKey?.(e)) return;
-    const step = (e.target as HTMLElement)?.closest?.("[data-step]") as HTMLElement | null;
+    const step = (e.target as HTMLElement)?.closest?.("[data-step],[data-when]") as HTMLElement | null;
     if (step) {
-      if (this.flowKey(e, step)) return;
+      if (step.dataset.step !== undefined && this.flowKey(e, step)) return;
       if (e.key !== "z") return;
     }
     const cell = (e.target as HTMLElement)?.closest?.("td,th") as HTMLElement | null;
@@ -762,6 +976,113 @@ export class Editor {
     this.render(eng.state);
     this.setCaret(lastId, (lines[lines.length - 1] ?? "").length);
   }
+}
+
+export function embedSrc(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    let id: string | null = null;
+    if (host === "youtu.be") id = u.pathname.slice(1);
+    else if (host.endsWith("youtube.com")) id = u.searchParams.get("v") ?? (u.pathname.match(/\/(?:embed|shorts|live)\/([\w-]{6,})/)?.[1] ?? null);
+    if (id && /^[\w-]{6,20}$/.test(id)) return `https://www.youtube-nocookie.com/embed/${id}`;
+    const loom = host === "loom.com" && u.pathname.match(/\/share\/([\w-]+)/)?.[1];
+    if (loom) return `https://www.loom.com/embed/${loom}`;
+    if (host === "vimeo.com" && /^\/\d+/.test(u.pathname)) return `https://player.vimeo.com/video${u.pathname}`;
+    if (host === "figma.com" || host.endsWith(".figma.com")) return `https://www.figma.com/embed?embed_host=phlo&url=${encodeURIComponent(url)}`;
+  } catch {
+    /* not a URL */
+  }
+  return null;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+const SERIES_COLORS = ["var(--cobalt)", "var(--teal)", "var(--saffron)"];
+
+function fmt(v: number, unit?: string): string {
+  const abs = Math.abs(v);
+  const n = abs >= 1e6 ? `${+(v / 1e6).toFixed(1)}M` : abs >= 1e4 ? `${+(v / 1e3).toFixed(1)}k` : `${+v.toFixed(2)}`;
+  return unit === "$" ? `$${n}` : unit === "%" ? `${n}%` : n;
+}
+
+function esc(t: string): string {
+  return t.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+/** Bar, line and histogram as SVG, from tokens only. One series highlighted (cobalt), up to three. */
+export function renderChartSvg(c: ChartData): string {
+  const W = 640;
+  const H = 260;
+  const L = 48;
+  const R = 12;
+  const T = 16;
+  const B = 36;
+  let labels = c.labels;
+  let series = c.series;
+  if (c.type === "histogram") {
+    const vals = c.series[0].values;
+    const min = Math.min(...vals);
+    const max = Math.max(...vals);
+    const bins = Math.max(4, Math.min(12, Math.round(Math.sqrt(vals.length))));
+    const w = (max - min) / bins || 1;
+    const counts = Array(bins).fill(0);
+    for (const v of vals) counts[Math.min(bins - 1, Math.floor((v - min) / w))]++;
+    labels = counts.map((_, i) => fmt(min + i * w));
+    series = [{ name: "Count", values: counts }];
+  }
+  const all = series.flatMap((x) => x.values);
+  const maxV = Math.max(0, ...all);
+  const minV = Math.min(0, ...all);
+  const span = maxV - minV || 1;
+  const nice = (v: number) => {
+    const p = 10 ** Math.floor(Math.log10(Math.abs(v) || 1));
+    return Math.ceil(v / p) * p;
+  };
+  const top = nice(maxV) || 1;
+  const yScale = (v: number) => T + (H - T - B) * (1 - (v - minV) / (Math.max(top, maxV) - minV || span));
+  const plotW = W - L - R;
+  const parts: string[] = [];
+  for (let g = 0; g <= 4; g++) {
+    const v = minV + ((Math.max(top, maxV) - minV) * g) / 4;
+    const y = yScale(v);
+    parts.push(`<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--hairline)" stroke-width="1"/>`);
+    parts.push(`<text x="${L - 8}" y="${y + 4}" text-anchor="end" class="ax">${esc(fmt(v, c.unit))}</text>`);
+  }
+  const n = labels.length;
+  const slot = plotW / Math.max(1, n);
+  if (c.type === "line") {
+    series.forEach((sr, k) => {
+      const pts = sr.values.map((v, i) => `${L + slot * (i + 0.5)},${yScale(v)}`).join(" ");
+      parts.push(`<polyline points="${pts}" fill="none" stroke="${SERIES_COLORS[k % 3]}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`);
+      sr.values.forEach((v, i) => parts.push(`<circle cx="${L + slot * (i + 0.5)}" cy="${yScale(v)}" r="3.5" fill="var(--paper)" stroke="${SERIES_COLORS[k % 3]}" stroke-width="2"><title>${esc(`${labels[i]}: ${fmt(v, c.unit)}`)}</title></circle>`));
+    });
+  } else {
+    const gap = c.type === "histogram" ? 1 : Math.min(18, slot * 0.28);
+    const bw = (slot - gap) / series.length;
+    series.forEach((sr, k) => {
+      sr.values.forEach((v, i) => {
+        const x = L + slot * i + gap / 2 + bw * k;
+        const y = yScale(Math.max(v, 0));
+        const h = Math.abs(yScale(v) - yScale(0));
+        parts.push(`<rect x="${x}" y="${y}" width="${Math.max(1, bw)}" height="${Math.max(0, h)}" rx="1" fill="${SERIES_COLORS[k % 3]}"><title>${esc(`${labels[i]}: ${fmt(v, c.unit)}`)}</title></rect>`);
+        if (c.type === "bar" && series.length === 1 && n <= 12) parts.push(`<text x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" class="val">${esc(fmt(v, c.unit))}</text>`);
+      });
+    });
+  }
+  parts.push(`<line x1="${L}" x2="${W - R}" y1="${yScale(0)}" y2="${yScale(0)}" stroke="var(--ink-muted)" stroke-width="1"/>`);
+  const every = Math.ceil(n / 12);
+  labels.forEach((l, i) => {
+    if (i % every) return;
+    parts.push(`<text x="${L + slot * (i + 0.5)}" y="${H - B + 20}" text-anchor="middle" class="ax">${esc(l.length > 14 ? `${l.slice(0, 13)}…` : l)}</text>`);
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(`${c.type} chart: ${labels.map((l, i) => `${l} ${series.map((x) => fmt(x.values[i], c.unit)).join("/")}`).join(", ")}`)}">${parts.join("")}</svg>`;
 }
 
 function placeCaretEnd(el: HTMLElement) {
