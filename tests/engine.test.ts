@@ -3,7 +3,7 @@ import { DocEngine } from "../src/engine/engine";
 import type { Block, Draft } from "../src/engine/model";
 import { emptyDraft } from "../src/engine/model";
 import { localPlan } from "../src/engine/local";
-import { buildRequest, compilePlan, enforceScribe, noveltyRatio, cleanSpeech, numberize } from "../src/engine/settle";
+import { buildRequest, compilePlan, enforceScribe, noveltyRatio, cleanSpeech, numberize, speechHints } from "../src/engine/settle";
 
 function blk(id: string, kind: Block["kind"], text: string, wet = false, origin: Block["origin"] = "typed"): Block {
   return { id, kind, text, wet, rev: 0, origin };
@@ -120,6 +120,22 @@ describe("settle", () => {
     return e;
   }
 
+  it("finds signposted sections and enumerations in speech", () => {
+    expect(speechHints("pain points. picking forty photos out of four thousand is the wall")).toMatchObject({ cue: "Pain points", items: [] });
+    expect(speechHints("for solutions, one, auto pick the best moments. two, a designer layout that looks like a real book")).toEqual({
+      lead: "",
+      cue: "Solutions",
+      rest: "one, auto pick the best moments. two, a designer layout that looks like a real book",
+      items: ["auto pick the best moments", "a designer layout that looks like a real book"],
+    });
+    expect(speechHints("the metric I'd use is the percent of started books printed").cue).toBe("Metric");
+    expect(speechHints("okay so let me start by clarifying the goal. I think the goal is more printed books").cue).toBe("Goal");
+    expect(speechHints("I think we should price it at two hundred").cue).toBeNull();
+    expect(speechHints("the prompt is photo books. let me start by clarifying the goal. I think the goal is printed books")).toMatchObject({ lead: "the prompt is photo books.", cue: "Goal" });
+    expect(speechHints("we lose people at signup. it hurts. pricing is fine").cue).toBeNull();
+    expect(speechHints("so yeah. that's basically it for now").cue).toBeNull();
+  });
+
   it("spoken and written numbers compare equal", () => {
     expect(numberize("picking forty photos out of four thousand")).toBe("picking 40 photos out of 4000");
     expect(numberize("a hundred fifty to two hundred dollars")).toBe("150 to 200 dollars");
@@ -128,6 +144,7 @@ describe("settle", () => {
 
   it("cleans fillers and repetition", () => {
     expect(cleanSpeech("um so the the price is, you know, too high")).toBe("The price is, too high");
+    expect(cleanSpeech("it's the wall. and the layouts look generic")).toBe("It's the wall. And the layouts look generic");
     expect(cleanSpeech("okay so we charge per seat")).toBe("We charge per seat");
   });
 

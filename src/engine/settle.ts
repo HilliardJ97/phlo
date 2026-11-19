@@ -211,6 +211,79 @@ export function withCorrectionTarget(req: SettleRequest): SettleRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Speech hints: make the hard-to-hear structure explicit before any model sees it.
+// ---------------------------------------------------------------------------
+
+export interface SpeechHints {
+  /** Words before a mid-utterance cue ("The prompt is X. Let me start by clarifying the goal…"). */
+  lead: string;
+  /** A section cue the speaker signposted ("pain points.", "for solutions,", "the metric I'd use"). */
+  cue: string | null;
+  /** The words after the cue. */
+  rest: string;
+  /** Enumerated items ("one, X. two, Y" / "first… second…"), in order. */
+  items: string[];
+}
+
+const CUE_PATTERNS: RegExp[] = [
+  // "let me start by clarifying the goal. I think…" / "let's talk about pricing,"
+  /^(?:ok(?:ay)?,?\s+|so,?\s+)*(?:let me|let's|i'll|i want to)\s+(?:start|begin|move on|talk|go)\s+(?:by|with|to|about|on)\s+(?:clarifying\s+|defining\s+|thinking about\s+)?(?:the\s+)?([a-z][a-z' ]{1,28}?)\s*[.,:;]\s*(.*)$/i,
+  // "for solutions, one…" / "as for pricing:" / "in terms of risks,"
+  /^(?:ok(?:ay)?,?\s+|so,?\s+|and\s+)*(?:for|as for|about|regarding|in terms of|on)\s+(?:the\s+)?([a-z][a-z' ]{1,28}?)\s*[,:]\s*(.+)$/i,
+  // "the metric I'd use is…" / "the users I'd focus on are…"
+  /^(?:ok(?:ay)?,?\s+|so,?\s+|um,?\s+)*the\s+([a-z][a-z' ]{1,24}?)\s+(?:i'?d|we'?d|i|we)\s+(?:use|focus on|pick|choose|track|target)\b\s*(.*)$/i,
+  // "pain points. picking forty…" (a short label, then a full stop)
+  /^(?:ok(?:ay)?,?\s+|so,?\s+|um,?\s+)*([a-z][a-z' ]{2,24}?)\s*[.:]\s+(.{12,})$/i,
+];
+
+const ENUM = /(?:^|[.,;]\s*|\s)(?:one|two|three|four|five|first|second|third|fourth|fifth|1|2|3|4|5)[,:.)]\s+/gi;
+
+export function speechHints(text: string): SpeechHints {
+  const whole = text.trim();
+  // A cue can start mid-utterance: try each sentence start; words before it are the lead.
+  const sentences = whole.split(/(?<=[.!?])\s+/);
+  for (let i = 0; i < sentences.length; i++) {
+    const h = cueAt(sentences.slice(i).join(" "), i > 0);
+    if (h) return { lead: sentences.slice(0, i).join(" "), ...h, items: enumerate(h.rest) };
+  }
+  return { lead: "", cue: null, rest: whole, items: enumerate(whole) };
+}
+
+function cueAt(t: string, midUtterance: boolean): { cue: string; rest: string } | null {
+  let cue: string | null = null;
+  let rest = t;
+  for (const [k, re] of CUE_PATTERNS.entries()) {
+    const m = re.exec(t);
+    if (!m) continue;
+    const label = m[1].trim();
+    const words = label.split(/\s+/);
+    // A cue is a short label, not a sentence ("i think", "that's it" are not cues).
+    if (words.length > 3 || /^(?:i|we|it|that|this|so|and|but|yes|yeah|no|ok|okay|well|um|uh|right|anyway|alright|cool|great|sure|hmm)\b/i.test(label)) continue;
+    // Mid-utterance, only explicit signposts count ("let me start by…", "for X,"), not any short sentence.
+    if (midUtterance && k === 3) continue;
+    cue = label.replace(/\b\w/, (c) => c.toUpperCase());
+    // "the metric I'd use is X": the whole sentence is the content; elsewhere the cue is a label to drop.
+    rest = k === 2 ? t : (m[2] ?? "").trim();
+    break;
+  }
+  return cue ? { cue, rest } : null;
+}
+
+function enumerate(rest: string): string[] {
+  const items: string[] = [];
+  const marks = [...rest.matchAll(ENUM)];
+  if (marks.length >= 2) {
+    for (let i = 0; i < marks.length; i++) {
+      const start = marks[i].index! + marks[i][0].length;
+      const end = i + 1 < marks.length ? marks[i + 1].index! : rest.length;
+      const item = rest.slice(start, end).trim().replace(/[.,;]+$/, "");
+      if (item) items.push(item);
+    }
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------------
 // Text utilities
 // ---------------------------------------------------------------------------
 
@@ -241,6 +314,8 @@ export function cleanSpeech(text: string): string {
   t = t.replace(/^(?:(?:ok(?:ay)?|so|and|well|right|alright)[,\s]+)+(?=\w)/i, "");
   if (!t) return t;
   t = t[0].toUpperCase() + t.slice(1);
+  // Speech recognizers rarely capitalize after a full stop.
+  t = t.replace(/([.!?]\s+)([a-z])/g, (_, p, c) => p + c.toUpperCase());
   return t;
 }
 

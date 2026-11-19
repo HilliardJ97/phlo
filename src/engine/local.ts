@@ -7,7 +7,7 @@
  * configured, so Phlo always settles.
  */
 import type { SettlePlan, SettleRequest, WetItem } from "./settle";
-import { cleanSpeech, contentWords, ensureSentence, numberize } from "./settle";
+import { cleanSpeech, contentWords, ensureSentence, numberize, speechHints } from "./settle";
 
 const NEW_SECTION =
   /^(?:ok(?:ay)?,?\s+)?(?:new|add(?: a)?|start(?: a)?|make(?: a)?|create(?: a)?)\s+(?:section|heading|header)(?:\s+(?:called|named|for|on|about))?\s*[:,-]?\s*(.+?)[.!]?$/i;
@@ -213,6 +213,30 @@ export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePl
     }
 
     if (opts.commandsOnly) return null;
+
+    // Signposted section and enumerations: the speaker told us the structure.
+    const hints = w.origin === "voice" ? speechHints(text) : null;
+    if (hints?.cue) {
+      if (hints.lead.trim()) {
+        const kind = kindFor(hints.lead, w.origin);
+        plan.placements.push({ wet_id: w.id, under: "here", kind, text: polish(hints.lead, kind), tangent: false });
+      }
+      let under = findHeadingByName(hints.cue, req, newRefs);
+      if (!under) {
+        const ref = `h${++refN}`;
+        plan.new_headings.push({ ref, text: headingText(hints.cue), after: null });
+        newRefs.set(headingText(hints.cue), ref);
+        lastNewHeading = ref;
+        under = ref;
+      }
+      if (hints.items.length >= 2) {
+        for (const item of hints.items) plan.placements.push({ wet_id: w.id, under, kind: "bullet", text: polish(item, "bullet"), tangent: false });
+      } else if (hints.rest) {
+        const kind = kindFor(hints.rest, w.origin);
+        plan.placements.push({ wet_id: w.id, under, kind, text: polish(hints.rest, kind), tangent: false });
+      } else plan.consumed.push(w.id);
+      continue;
+    }
 
     const tg = req.role === "partner" && w.origin === "voice" ? TANGENT.exec(text) : null;
     if (tg && req.outline.some((o) => o.kind === "heading")) {

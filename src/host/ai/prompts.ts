@@ -2,7 +2,7 @@
  * Prompts are frozen strings so the system prefix caches across requests.
  * Anything per-request (outline, wet words) goes in the user message.
  */
-import type { SettleRequest } from "../../engine/settle";
+import { speechHints, type SettleRequest } from "../../engine/settle";
 
 export const SETTLE_SYSTEM = `You are the settling engine inside Phlo, a page that organizes itself while a person thinks out loud.
 
@@ -15,6 +15,7 @@ How to place words
 - Action items someone commits to do ("talk to 5 couples", "Priya will send the deck by Friday") go to under = "next", the Next list at the end of the page. Open topics, ideas and observations are never Next.
 - One wet item may contain several ideas for different sections. Split it into several placements with the same wet_id, in the order spoken.
 - Enumerations ("one…, two…", "first…, second…", "a few options: …") become one bullet per item, in order.
+- Hints computed by Phlo (signposted section, enumerated items) are reliable: use the signposted section (an existing heading that matches it, or a new heading with those words) and one bullet per enumerated item.
 - When the person signposts the next part of their thinking ("let me start with the goal", "pain points.", "for solutions", "the metric I'd use"), that cue starts a new section: use their cue words as the heading (short: "Goal", "Users", "Pain points", "Solutions", "Metric").
 - kind: "bullet" for list-like items (options, steps, short parallel points); "numbered" for steps that must happen in order; "question" for an open question the person is asking themselves; "decision" for something they state as decided ("we decided", "we're going with", "we agreed to"); otherwise "paragraph".
 - Clean speech the way a careful editor would: remove fillers (um, uh, like, you know, okay so), false starts, signposting ("let me start by…") and repetition; fix punctuation and capitalization; write spoken numbers as numerals ("two hundred dollars" → "$200"). Keep the person's words, voice and meaning. Never add facts, claims, examples or opinions they did not say. Never summarize away detail.
@@ -42,7 +43,11 @@ export function settleUserMessage(req: SettleRequest): string {
         .join("\n")
     : "(empty page)";
   const wet = req.wet
-    .map((w) => `[${w.id}] (${w.origin}${w.under ? `, currently under ${w.under}` : ""}) ${w.text}`)
+    .map((w) => {
+      const h = speechHints(w.text);
+      const hint = [h.lead && h.cue ? `before the signpost: "${h.lead}"` : "", h.cue ? `signposted section: "${h.cue}"` : "", h.items.length ? `enumerated items: ${h.items.map((i) => `"${i}"`).join(" | ")}` : ""].filter(Boolean).join("; ");
+      return `[${w.id}] (${w.origin}${w.under ? `, currently under ${w.under}` : ""}) ${w.text}${hint ? `\n    hint: ${hint}` : ""}`;
+    })
     .join("\n");
   return [
     `ROLE: ${req.role.toUpperCase()}`,
