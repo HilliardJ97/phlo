@@ -1,0 +1,1 @@
+The split-bubble symbol, the lockup, the wordmark (Geist Medium, outlined) in light and dark versions, and the app icon. Light versions use ink #16171a and vermilion #e5432a. Dark versions use #f2f1ec and #ff5b3d. Never recolor them.

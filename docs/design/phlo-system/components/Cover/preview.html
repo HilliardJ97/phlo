@@ -1,0 +1,32 @@
+<!-- @dsCard height=288 -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500&display=swap">
+<style>
+  html,body{margin:0;background:var(--paper)}
+  .cv{position:relative;width:960px;height:288px;overflow:hidden;background:var(--paper)}
+  svg{position:absolute;left:0;top:0}
+  .verm{fill:var(--vermilion)} .ink{fill:var(--ink)} .cob{fill:var(--cobalt)} .teal{fill:var(--teal)} .saf{fill:var(--saffron)} .tabc{fill:var(--tab)} .wet{fill:var(--ink-wet)}
+  .tabr{rx:var(--radius-sm)}
+  .txt{position:absolute;left:48px;bottom:48px;max-width:440px}
+  .name{font-family:var(--font-sans);font-weight:400;font-size:120px;line-height:.92;letter-spacing:-.04em;color:var(--ink)}
+  .tag{font-family:var(--font-sans);font-size:14px;line-height:20px;color:var(--ink-muted);margin-top:16px}
+</style>
+<div class="cv">
+  <svg width="960" height="288" viewBox="0 0 960 288">
+    <!--
+      blocks: vermilion half-disc r=96 (the symbol's voice), ink slab 120x192 with tail (the symbol's page), cobalt square 72, saffron pill 144x48, teal disc r=24, tab flag 40x16
+      arrangement: the split bubble at hero scale, bleeding off the top edge, with idea-color satellites on the right; everything right of x=480
+      pattern: the symbol's own grammar (half-round, square, tail, gap) repeated as a literal motif; chosen because the split bubble is the brand
+      scales: gap 16 (space-3), satellite steps of 24 and 48 (space-4, space-5), radius-sm on the tab, radius-full on pill and disc
+    -->
+    <path class="verm" d="M600 -8 A96 96 0 0 0 600 184 Z"/>
+    <path class="ink" d="M616 -8 H736 V232 L688 184 H616 Z"/>
+    <rect class="cob" x="784" y="40" width="72" height="72"/>
+    <circle class="teal" cx="904" cy="76" r="24"/>
+    <rect class="saf" x="784" y="160" width="144" height="48" rx="24"/>
+    <rect class="tabc tabr" x="880" y="232" width="40" height="16"/>
+  </svg>
+  <div class="txt">
+    <div class="name">Phlo</div>
+    <div class="tag">Think out loud. Watch it take shape.</div>
+  </div>
+</div>

@@ -1,0 +1,32 @@
+{
+  "name": "phlo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Think out loud. Watch it take shape.",
+  "type": "module",
+  "main": "dist/desktop/main.cjs",
+  "scripts": {
+    "build:renderer": "vite build",
+    "build:desktop": "node scripts/build-desktop.mjs",
+    "build": "npm run build:renderer && npm run build:desktop",
+    "web": "npm run build:renderer && tsx src/host/server.ts",
+    "desktop": "npm run build && electron .",
+    "test": "vitest run",
+    "eval": "tsx evals/run.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "electron": "^38.8.6",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.6",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.10.0",
+    "geist": "^1.9.2",
+    "zod": "^4.6.7"
+  }
+}

@@ -1,0 +1,266 @@
+{
+  "manifestVersion": 3,
+  "name": "Phlo",
+  "namespace": "Phlo",
+  "files": [
+    "assets/Explorations/README.md",
+    "assets/Logos/README.md",
+    "assets/Symbols/README.md",
+    "components/InkSettling/README.md",
+    "components/Role/README.md",
+    "components/Symbol/README.md",
+    "components/Tab/README.md",
+    "components/VoiceDot/README.md",
+    "components/Wordmark/README.md",
+    "tokens.css"
+  ],
+  "libraries": [],
+  "components": [
+    {
+      "name": "InkSettling",
+      "group": "Page",
+      "summary": "Live speech appears in ink-wet and settles into ink as Phlo places it under the right heading."
+    },
+    {
+      "name": "Role",
+      "group": "Page",
+      "summary": "The Partner/Scribe switch sets Phlo's role for a session, and the corner label tells the room which role is on."
+    },
+    {
+      "name": "Symbol",
+      "group": "Marks",
+      "summary": "The split bubble is Phlo's symbol: a vermilion half-circle (voice) and an ink square with a tail (the page), separated by a small gap."
+    },
+    {
+      "name": "Tab",
+      "group": "Page",
+      "summary": "A flat sticky-tab flag that marks anything Phlo pulled out, flagged or researched."
+    },
+    {
+      "name": "VoiceDot",
+      "group": "Marks",
+      "summary": "A solid vermilion disc that is the mic, the recording state and the app icon."
+    },
+    {
+      "name": "Wordmark",
+      "group": "Marks",
+      "summary": "The lockup pairs the split-bubble symbol with a quiet lowercase phlo set in Geist Medium."
+    }
+  ],
+  "assetGroups": [
+    {
+      "name": "Logos",
+      "tile": "l",
+      "order": [
+        "phlo-symbol.svg",
+        "phlo-symbol-dark.svg",
+        "phlo-lockup.svg",
+        "phlo-lockup-dark.svg",
+        "phlo-wordmark.svg",
+        "phlo-wordmark-dark.svg",
+        "phlo-app-icon.svg"
+      ],
+      "files": [
+        {
+          "path": "assets/Logos/phlo-symbol.svg",
+          "id": "b5fb0a73fb881ac16c550be6f953199a"
+        },
+        {
+          "path": "assets/Logos/phlo-symbol-dark.svg",
+          "id": "c07b14f6299ce6cc62892ff2454f05be"
+        },
+        {
+          "path": "assets/Logos/phlo-lockup.svg",
+          "id": "1855e8ed0418f5d74087abeb474186dc"
+        },
+        {
+          "path": "assets/Logos/phlo-lockup-dark.svg",
+          "id": "cdffd41e8f8348e9a4c881fe4592b3f3"
+        },
+        {
+          "path": "assets/Logos/phlo-wordmark.svg",
+          "id": "5c38a3522f60549d8a6b5a025d0b62d8"
+        },
+        {
+          "path": "assets/Logos/phlo-wordmark-dark.svg",
+          "id": "651d4ba8892954acb4f41cb7080d999b"
+        },
+        {
+          "path": "assets/Logos/phlo-app-icon.svg",
+          "id": "2c748ad93194a3585cc596c9a4abada1"
+        }
+      ]
+    },
+    {
+      "name": "Symbols",
+      "order": [
+        "phlo-talk.svg",
+        "phlo-partner.svg",
+        "phlo-scribe.svg",
+        "phlo-settle.svg",
+        "phlo-publish.svg"
+      ],
+      "files": [
+        {
+          "path": "assets/Symbols/phlo-talk.svg",
+          "id": "2650f7013fa6629c489859b0fd8d9a92"
+        },
+        {
+          "path": "assets/Symbols/phlo-partner.svg",
+          "id": "6347dae075625b6a742cafa358d2ef93"
+        },
+        {
+          "path": "assets/Symbols/phlo-scribe.svg",
+          "id": "39589a88a07da144173fae46eb1e4c96"
+        },
+        {
+          "path": "assets/Symbols/phlo-settle.svg",
+          "id": "926f8c8563312361c4918457454ecbe9"
+        },
+        {
+          "path": "assets/Symbols/phlo-publish.svg",
+          "id": "d0c1717224e5504265156f98edce3c9d"
+        }
+      ]
+    },
+    {
+      "name": "Explorations",
+      "order": [
+        "phlo-wave.svg",
+        "phlo-dot.svg",
+        "phlo-seal.svg",
+        "phlo-pop.svg",
+        "phlo-icon.svg"
+      ],
+      "files": [
+        {
+          "path": "assets/Explorations/phlo-wave.svg",
+          "id": "c03129fd1af2761e334c1597dec533e1"
+        },
+        {
+          "path": "assets/Explorations/phlo-dot.svg",
+          "id": "3c6b6c32cec7142b58fbc8addae527d3"
+        },
+        {
+          "path": "assets/Explorations/phlo-seal.svg",
+          "id": "7e0e27897c129d667fb091af9f58ab6c"
+        },
+        {
+          "path": "assets/Explorations/phlo-pop.svg",
+          "id": "4de1d0d3f97e74ef1be63210fd319d53"
+        },
+        {
+          "path": "assets/Explorations/phlo-icon.svg",
+          "id": "6111b6614f4eb0eac264b11e39ba2ecf"
+        }
+      ]
+    }
+  ],
+  "storage": {
+    "files": {
+      "assets/Explorations/phlo-dot.svg": {
+        "store": "blob",
+        "id": "3c6b6c32cec7142b58fbc8addae527d3",
+        "bytes": 427,
+        "type": "image/svg+xml"
+      },
+      "assets/Explorations/phlo-icon.svg": {
+        "store": "blob",
+        "id": "6111b6614f4eb0eac264b11e39ba2ecf",
+        "bytes": 211,
+        "type": "image/svg+xml"
+      },
+      "assets/Explorations/phlo-pop.svg": {
+        "store": "blob",
+        "id": "4de1d0d3f97e74ef1be63210fd319d53",
+        "bytes": 484,
+        "type": "image/svg+xml"
+      },
+      "assets/Explorations/phlo-seal.svg": {
+        "store": "blob",
+        "id": "7e0e27897c129d667fb091af9f58ab6c",
+        "bytes": 514,
+        "type": "image/svg+xml"
+      },
+      "assets/Explorations/phlo-wave.svg": {
+        "store": "blob",
+        "id": "c03129fd1af2761e334c1597dec533e1",
+        "bytes": 1342,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-app-icon.svg": {
+        "store": "blob",
+        "id": "2c748ad93194a3585cc596c9a4abada1",
+        "bytes": 345,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-lockup-dark.svg": {
+        "store": "blob",
+        "id": "cdffd41e8f8348e9a4c881fe4592b3f3",
+        "bytes": 1549,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-lockup.svg": {
+        "store": "blob",
+        "id": "1855e8ed0418f5d74087abeb474186dc",
+        "bytes": 1549,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-symbol-dark.svg": {
+        "store": "blob",
+        "id": "c07b14f6299ce6cc62892ff2454f05be",
+        "bytes": 215,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-symbol.svg": {
+        "store": "blob",
+        "id": "b5fb0a73fb881ac16c550be6f953199a",
+        "bytes": 215,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-wordmark-dark.svg": {
+        "store": "blob",
+        "id": "651d4ba8892954acb4f41cb7080d999b",
+        "bytes": 1423,
+        "type": "image/svg+xml"
+      },
+      "assets/Logos/phlo-wordmark.svg": {
+        "store": "blob",
+        "id": "5c38a3522f60549d8a6b5a025d0b62d8",
+        "bytes": 1423,
+        "type": "image/svg+xml"
+      },
+      "assets/Symbols/phlo-partner.svg": {
+        "store": "blob",
+        "id": "6347dae075625b6a742cafa358d2ef93",
+        "bytes": 215,
+        "type": "image/svg+xml"
+      },
+      "assets/Symbols/phlo-publish.svg": {
+        "store": "blob",
+        "id": "d0c1717224e5504265156f98edce3c9d",
+        "bytes": 215,
+        "type": "image/svg+xml"
+      },
+      "assets/Symbols/phlo-scribe.svg": {
+        "store": "blob",
+        "id": "39589a88a07da144173fae46eb1e4c96",
+        "bytes": 407,
+        "type": "image/svg+xml"
+      },
+      "assets/Symbols/phlo-settle.svg": {
+        "store": "blob",
+        "id": "926f8c8563312361c4918457454ecbe9",
+        "bytes": 215,
+        "type": "image/svg+xml"
+      },
+      "assets/Symbols/phlo-talk.svg": {
+        "store": "blob",
+        "id": "2650f7013fa6629c489859b0fd8d9a92",
+        "bytes": 148,
+        "type": "image/svg+xml"
+      }
+    },
+    "blobBytesUsed": 10897
+  }
+}

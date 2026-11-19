@@ -1,0 +1,228 @@
+import { describe, expect, it } from "vitest";
+import { DocEngine } from "../src/engine/engine";
+import type { Block, Draft } from "../src/engine/model";
+import { emptyDraft } from "../src/engine/model";
+import { localPlan } from "../src/engine/local";
+import { buildRequest, compilePlan, enforceScribe, noveltyRatio, cleanSpeech } from "../src/engine/settle";
+
+function blk(id: string, kind: Block["kind"], text: string, wet = false, origin: Block["origin"] = "typed"): Block {
+  return { id, kind, text, wet, rev: 0, origin };
+}
+
+function seeded(): DocEngine {
+  const d: Draft = emptyDraft("d1");
+  const e = new DocEngine(d);
+  e.commit({
+    id: "seed",
+    actor: "user",
+    label: "seed",
+    ops: [
+      { t: "insert", block: blk("h1", "heading", "Problem"), after: null },
+      { t: "insert", block: blk("p1", "paragraph", "Interviews are hard to follow."), after: "h1" },
+      { t: "insert", block: blk("h2", "heading", "Pricing"), after: "p1" },
+      { t: "insert", block: blk("p2", "paragraph", "We charge per seat."), after: "h2" },
+      { t: "insert", block: blk("h3", "heading", "Recommendation"), after: "p2" },
+      { t: "insert", block: blk("p3", "paragraph", "Ship the voice-first editor."), after: "h3" },
+    ],
+  });
+  return e;
+}
+
+describe("DocEngine", () => {
+  it("rejects stale edits instead of overwriting newer typing", () => {
+    const e = seeded();
+    const rev = e.block("p2")!.rev;
+    e.commit({ id: "t1", actor: "user", label: "type", ops: [{ t: "update", id: "p2", patch: { text: "We charge per seat, monthly." } }] });
+    const res = e.commit({
+      id: "t2",
+      actor: "phlo",
+      label: "settle",
+      ops: [{ t: "update", id: "p2", expectRev: rev, patch: { text: "Model text" } }],
+    });
+    expect(res.ok).toBe(false);
+    expect(e.block("p2")!.text).toBe("We charge per seat, monthly.");
+  });
+
+  it("is atomic: one stale op rejects the whole transaction", () => {
+    const e = seeded();
+    const p1rev = e.block("p1")!.rev;
+    e.commit({ id: "t1", actor: "user", label: "type", ops: [{ t: "update", id: "p3", patch: { text: "x" } }] });
+    const p3old = 1;
+    const res = e.commit({
+      id: "t2",
+      actor: "phlo",
+      label: "settle",
+      ops: [
+        { t: "update", id: "p1", expectRev: p1rev, patch: { text: "changed" } },
+        { t: "update", id: "p3", expectRev: p3old, patch: { text: "changed" } },
+      ],
+    });
+    expect(res.ok).toBe(false);
+    expect(e.block("p1")!.text).toBe("Interviews are hard to follow.");
+  });
+
+  it("selective undo reverses one edit and keeps later unrelated typing", () => {
+    const e = seeded();
+    const r = e.commit({
+      id: "phlo1",
+      actor: "phlo",
+      label: "Settle",
+      ops: [{ t: "update", id: "p3", patch: { text: "Delay launch; study B changes it." } }],
+    });
+    expect(r.ok).toBe(true);
+    e.commit({ id: "u1", actor: "user", label: "type", ops: [{ t: "update", id: "p1", patch: { text: "Typed meanwhile." } }] });
+    const u = e.undo("phlo1");
+    expect(u?.ok).toBe(true);
+    expect(e.block("p3")!.text).toBe("Ship the voice-first editor.");
+    expect(e.block("p1")!.text).toBe("Typed meanwhile.");
+  });
+
+  it("refuses to undo an edit whose block changed since", () => {
+    const e = seeded();
+    e.commit({ id: "phlo1", actor: "phlo", label: "Settle", ops: [{ t: "update", id: "p3", patch: { text: "A" } }] });
+    e.commit({ id: "u1", actor: "user", label: "type", ops: [{ t: "update", id: "p3", patch: { text: "AB" } }] });
+    const u = e.undo("phlo1");
+    expect(u?.ok).toBe(false);
+    expect(e.block("p3")!.text).toBe("AB");
+  });
+
+  it("park keeps removed blocks recoverable and undo brings them back in place", () => {
+    const e = seeded();
+    e.commit({ id: "p", actor: "voice", label: "Park", ops: [{ t: "park", id: "p2" }] });
+    expect(e.state.blocks.find((b) => b.id === "p2")).toBeUndefined();
+    expect(e.state.parked.map((b) => b.id)).toContain("p2");
+    e.undo();
+    expect(e.state.blocks.map((b) => b.id)).toEqual(["h1", "p1", "h2", "p2", "h3", "p3"]);
+  });
+
+  it("coalesces typing into one undo step", () => {
+    const e = seeded();
+    for (const t of ["W", "We", "We s"]) {
+      e.commit({ id: `k${t}`, actor: "user", label: "Typing", coalesce: "type:p1", ops: [{ t: "update", id: "p1", patch: { text: t } }] });
+    }
+    e.undo();
+    expect(e.block("p1")!.text).toBe("Interviews are hard to follow.");
+  });
+
+  it("redo reapplies", () => {
+    const e = seeded();
+    e.commit({ id: "x", actor: "user", label: "edit", ops: [{ t: "update", id: "p1", patch: { text: "new" } }] });
+    e.undo();
+    e.redo();
+    expect(e.block("p1")!.text).toBe("new");
+  });
+});
+
+describe("settle", () => {
+  function withWet(text: string, origin: Block["origin"] = "voice") {
+    const e = seeded();
+    e.commit({ id: "w", actor: "voice", label: "speech", ops: [{ t: "insert", block: blk("w1", "paragraph", text, true, origin), after: "p3" }] });
+    return e;
+  }
+
+  it("cleans fillers and repetition", () => {
+    expect(cleanSpeech("um so the the price is, you know, too high")).toBe("So the price is, too high");
+  });
+
+  it("local route places speech under the matching heading", () => {
+    const e = withWet("pricing should be usage based not per seat");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: [] });
+    const plan = localPlan(req)!;
+    expect(plan.placements[0].under).toBe("h2");
+    const c = compilePlan(e.snapshot(), req, plan);
+    const res = e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops });
+    expect(res.ok).toBe(true);
+    expect(e.state.blocks.map((b) => b.id)).toEqual(["h1", "p1", "h2", "p2", "w1", "h3", "p3"]);
+    expect(e.block("w1")!.wet).toBe(false);
+  });
+
+  it("local route handles 'new section X: content'", () => {
+    const e = withWet("new section risks: latency could break trust");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const plan = localPlan(req)!;
+    const c = compilePlan(e.snapshot(), req, plan);
+    expect(e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
+    const texts = e.state.blocks.map((b) => b.text);
+    expect(texts).toContain("Risks");
+    expect(texts[texts.indexOf("Risks") + 1]).toBe("Latency could break trust.");
+  });
+
+  it("scratch that folds the old version into a trail", () => {
+    const e = withWet("scratch that, ship the typing-first editor");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: ["p3"] });
+    const c = compilePlan(e.snapshot(), req, localPlan(req)!);
+    expect(e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
+    expect(e.block("p3")!.text).toBe("Ship the typing-first editor.");
+    expect(e.block("p3")!.trail).toEqual(["Ship the voice-first editor."]);
+    expect(e.state.parked.map((b) => b.id)).toContain("w1");
+  });
+
+  it("a settle computed before more typing conflicts and leaves the words wet", () => {
+    const e = withWet("pricing should be usage based", "typed");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const plan = localPlan(req)!;
+    // user keeps typing while the model thinks
+    e.commit({ id: "k", actor: "user", label: "Typing", ops: [{ t: "update", id: "w1", patch: { text: "pricing should be usage based, metered" } }] });
+    const c = compilePlan(e.snapshot(), req, plan);
+    const res = e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops });
+    expect(res.ok).toBe(false);
+    expect(e.block("w1")!.wet).toBe(true);
+    expect(e.block("w1")!.text).toBe("pricing should be usage based, metered");
+  });
+
+  it("scribe guard replaces invented words with the speaker's own", () => {
+    const e = withWet("we lose people at the signup step");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const { plan, violations } = enforceScribe(
+      {
+        title: "Growth strategy masterplan",
+        new_headings: [{ ref: "h", text: "Funnel optimization opportunities", after: null }],
+        placements: [{ wet_id: "w1", under: "h", kind: "paragraph", text: "Onboarding friction drives significant churn among enterprise prospects.", tangent: true }],
+        revisions: [],
+        consumed: [],
+        question: "Have you considered SSO?",
+      },
+      req,
+    );
+    expect(violations).toBeGreaterThanOrEqual(3);
+    expect(plan.placements[0].text).toBe("We lose people at the signup step.");
+    expect(plan.placements[0].under).toBe("here");
+    expect(plan.new_headings).toHaveLength(0);
+    expect(plan.question).toBeNull();
+    expect(plan.title).toBeNull();
+    expect(noveltyRatio(plan.placements[0].text, "we lose people at the signup step")).toBe(0);
+  });
+
+  it("unknown ids from a model are dropped, never guessed", () => {
+    const e = withWet("hello there friend");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const c = compilePlan(e.snapshot(), req, {
+      title: null,
+      new_headings: [],
+      placements: [{ wet_id: "nope", under: "h2", kind: "paragraph", text: "x", tangent: false }],
+      revisions: [{ block_id: "ghost", text: "y" }],
+      consumed: [],
+      question: null,
+    });
+    expect(c.issues.length).toBeGreaterThanOrEqual(2);
+    expect(e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops }).ok).toBe(true);
+    expect(e.block("w1")!.wet).toBe(false);
+  });
+
+  it("earns an idea color once a section has substance", () => {
+    const e = seeded();
+    e.commit({
+      id: "more",
+      actor: "user",
+      label: "more",
+      ops: [
+        { t: "insert", block: blk("x1", "paragraph", "a"), after: "p2" },
+        { t: "insert", block: blk("w1", "paragraph", "pricing tiers for teams", true, "voice"), after: "p3" },
+      ],
+    });
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const c = compilePlan(e.snapshot(), req, localPlan(req)!);
+    e.commit({ id: "s", actor: "phlo", label: "Settle", ops: c.ops });
+    expect(e.block("h2")!.theme).toBe("cobalt");
+  });
+});
