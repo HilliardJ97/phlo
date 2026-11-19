@@ -53,6 +53,8 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 
 ## Architecture
 
+**Start here:** [docs/PRODUCT.md](docs/PRODUCT.md) (MVP scope and quality bars) and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (system diagram, lanes, invariants, build order).
+
 ```
 renderer (sandboxed)                         host (Electron main / loopback server)
 ┌────────────────────────────────┐   IPC    ┌───────────────────────────────────────┐
@@ -69,7 +71,7 @@ renderer (sandboxed)                         host (Electron main / loopback serv
 
 **The model proposes; the engine decides** (`src/engine/settle.ts`). Settling sends the outline and the wet words, with their revs, to the host. The model returns a structured plan addressed by block id (placements, new headings, revisions, consumed instructions, one optional question), constrained by a JSON schema. `compilePlan` turns it into guarded ops. Unknown ids are dropped, never guessed. Anything the plan forgot settles in place. Nothing is deleted: instructions and removed blocks are parked.
 
-**Routing** (`src/host/ai/orchestrator.ts`). Explicit instructions take the local route (<5ms, offline). Everything else goes to Claude (`claude-opus-5-5`, low effort, cached system prompt, structured output, server-side refusal fallback) under a hard deadline, with the local plan as fallback. A newer request supersedes an older one. Every request is traced (route, latency, outcome); p50/p95 show in Settings.
+**Routing** (`src/host/ai/orchestrator.ts`). Explicit instructions take the local route (<5ms, offline). Everything else goes to ChatGPT through a warm Codex app-server (your plan, structured output), then an optional backup model, under a hard deadline, with the local plan as fallback. A newer request supersedes an older one. Every request is traced (route, latency, outcome); p50/p95 show in Settings.
 
 **Scribe is enforced, not prompted.** `enforceScribe` runs on every plan in Scribe, whoever produced it. Placements that introduce words the speaker didn't say fall back to their own cleaned speech. Invented headings, titles and questions are dropped.
 
