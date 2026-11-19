@@ -35,6 +35,8 @@ export interface OutlineItem {
   text: string;
   /** Heading id this block sits under (null for headings / top). */
   under: string | null;
+  /** Rev the model saw. Revisions are guarded by it, not by the current rev. */
+  rev: number;
 }
 
 export interface SettleRequest {
@@ -122,7 +124,7 @@ export function buildRequest(
   for (const b of draft.blocks) {
     if (b.kind === "heading") h = b.id;
     if (b.wet) continue;
-    outline.push({ id: b.id, kind: b.kind, text: b.text, under: b.kind === "heading" ? null : h });
+    outline.push({ id: b.id, kind: b.kind, text: b.text, under: b.kind === "heading" ? null : h, rev: b.rev });
   }
   const wet: WetItem[] = wetIds
     .map((id) => draft.blocks.find((b) => b.id === id))
@@ -403,17 +405,20 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
   }
 
   // 5. Revisions ("scratch that"): old text folds into a trail.
+  const seenRev = new Map(req.outline.map((o) => [o.id, o]));
   for (const r of plan.revisions) {
     const b = byId.get(r.block_id);
-    if (!b || b.wet) {
+    const seen = seenRev.get(r.block_id);
+    if (!b || b.wet || !seen) {
       issues.push(`bad revision target ${r.block_id}`);
       continue;
     }
     ops.push({
       t: "update",
       id: b.id,
-      expectRev: b.rev,
-      patch: { text: r.text.trim(), trail: [...(b.trail ?? []), b.text] },
+      // Guard with the rev the model saw: if you edited it since, this conflicts.
+      expectRev: seen.rev,
+      patch: { text: r.text.trim(), trail: [...(b.trail ?? []), seen.text] },
     });
   }
 

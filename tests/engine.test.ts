@@ -147,6 +147,14 @@ describe("settle", () => {
     expect(texts[texts.indexOf("Risks") + 1]).toBe("Latency could break trust.");
   });
 
+  it("never drops words after a comma in a new-section command", () => {
+    const e = withWet("new section approach: talk, and the page organizes itself, then you publish");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    const plan = localPlan(req)!;
+    expect(plan.new_headings[0].text).toBe("Approach");
+    expect(plan.placements[0].text).toBe("Talk, and the page organizes itself, then you publish.");
+  });
+
   it("scratch that folds the old version into a trail", () => {
     const e = withWet("scratch that, ship the typing-first editor");
     const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: ["p3"] });

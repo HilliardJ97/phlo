@@ -344,3 +344,7 @@ dialog.settings .note { font: var(--text-small); color: var(--ink-muted); margin
   .blk[data-kind="heading"]::before, .blk[data-theme]::after { display: none; }
   .blk[data-tab]::after { right: -12px; width: 8px; }
 }
+
+body.view-shelf .chrome .right, body.view-reader .chrome .right { visibility: hidden; }
+.back-draft { display: none; }
+body.view-shelf .back-draft, body.view-reader .back-draft { display: inline-flex; }

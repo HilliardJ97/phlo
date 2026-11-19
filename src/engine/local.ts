@@ -93,7 +93,10 @@ export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePl
     const ns = NEW_SECTION.exec(text);
     if (ns) {
       // "new section pricing: we charge per seat" -> heading + content
-      const [name, rest] = ns[1].split(/[:—]\s*|,\s+(?=\w+\s+\w+)/, 2) as [string, string | undefined];
+      // Split only at the first ":" or dash; never drop words after it.
+      const cut = ns[1].search(/\s*[:—–]\s*|\s+-\s+/);
+      const name = cut >= 0 ? ns[1].slice(0, cut) : ns[1];
+      const rest = cut >= 0 ? ns[1].slice(cut).replace(/^\s*[:—–-]\s*/, "") : undefined;
       const ref = `h${++refN}`;
       const title = headingText(name);
       plan.new_headings.push({ ref, text: title, after: null });

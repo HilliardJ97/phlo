@@ -32,6 +32,7 @@ app.innerHTML = `
   <header class="chrome">
     <div class="left">
       <button class="mark-btn" id="menu" aria-label="Drafts" title="Drafts (⌘\\)">${SYMBOL}<span class="wordmark">phlo</span></button>
+      <button class="chip back-draft" id="back-draft">← Draft</button>
     </div>
     <div class="right">
       <div class="role" role="group" aria-label="Role">
@@ -310,9 +311,8 @@ function load(d: Draft) {
   document.body.classList.toggle("room", false);
   $("room").setAttribute("aria-pressed", "false");
   void refreshDraftList();
-  requestAnimationFrame(() => {
-    if (!engine.state.title && !engine.state.blocks.some((b) => b.text)) editor.focusEnd();
-  });
+  // Don't grab the caret: on an empty page, Space should start talking.
+  (document.activeElement as HTMLElement | null)?.blur?.();
 }
 
 let listTimer = 0;
@@ -704,6 +704,7 @@ async function showShelf(highlight?: string) {
   });
 }
 $("open-shelf").onclick = () => void showShelf();
+$("back-draft").onclick = () => setView("draft");
 
 function showReader(p: PublishedPiece) {
   const r = $("reader");
