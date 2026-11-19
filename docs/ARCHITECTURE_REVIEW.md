@@ -54,23 +54,16 @@ words appear wet instantly ──► Settler (one request in flight, folds new w
 - **p50 settle ≤ 2 s, p95 ≤ 5 s**, measured from end of utterance to ink. The eval reports p50/p95; the Your AI panel shows live numbers.
 - **0 lost words, 0 text moved under the caret.** Already enforced.
 
-## 4. The real constraint: the ChatGPT plan's usage window
+## 4. The ChatGPT plan's usage window (corrected)
 
-Codex on ChatGPT Plus has a rolling 5-hour window, reportedly around **15–160 messages depending on model and task** ([TechRepublic](https://www.techrepublic.com/article/news-openai-five-hour-codex-limit-chatgpt-plus/), [developersdigest](https://www.developersdigest.tech/blog/codex-usage-limits-pricing-2026); third-party estimates, not official numbers).
+An earlier version of this section said a talking session could use up a Plus plan's Codex window. **That was overstated, and Justin's testing contradicts it:** usage didn't climb noticeably with the prototype, which settled through Codex the same way.
 
-Rough math: a 30-minute talking session at ~150 words a minute, settling at every pause (~every 15–20 s), is **90–120 model calls**. That's more than the low end of a Plus window in one sitting.
+Why the estimate was wrong: the published "15–160 messages per 5 hours" figures are third-party estimates, and they describe *coding-agent* messages. One of those is often tens of thousands of tokens over many tool steps. A Phlo settle is one turn: about 1.5k tokens in and 300 out at low reasoning, with no tools. Limits are credit-based, so a settle costs a small fraction of one coding "message".
 
-So every model call is budget. Today Phlo:
-- sends explicit commands to the local rules,
-- folds words that arrive mid-request into one call,
-- counts calls in the last 5 hours (shown in Your AI), and
-- on a plan-limit error, settles locally for 30 minutes instead of failing.
-
-To get to **≤ 20 model calls per 30-minute session**:
-1. **Confidence-gated local placement.** When the local matcher is sure (a strong heading match, an action item, a tangent cue), don't call the model. The meeting scenario shows the local rules are already good at routing into an existing agenda (7/8).
-2. **Adaptive batching.** Settle on longer pauses as the window fills: every ~3 utterances instead of every one.
-3. **One quality pass per session.** Cheap live placement, then a single higher-effort tidy pass when you stop talking, shown as a proposal you accept. Same idea as Granola's after-meeting pass.
-4. **On-device model for routing (later).** See §6.
+What stays true and what we do about it:
+- **Latency, not quota, is the constraint that matters on ChatGPT.** A process per call is the slow part (§3), so the warm app-server is the fix.
+- **Keep the cheap habits anyway.** Commands stay local, words fold into one call, calls are counted in Your AI, and a real limit error switches to local settling for 30 minutes.
+- **Measure, don't estimate.** The eval and Your AI now report requests per session. If a long session ever shows a problem, confidence-gated local placement and longer batching are ready to add.
 
 ## 5. Gaps, in priority order
 
@@ -91,6 +84,33 @@ Both on-device pieces need macOS 26 on Apple Silicon. They'd reach Phlo through 
 
 **For tomorrow's testing:** run `npm run web` in Chrome. Chrome's speech recognition is free, and with Codex signed in to your ChatGPT plan, nothing needs an API key.
 
+## 6b. Open-source models
+
+**Yes, and they fit Phlo unusually well**, because Phlo's hardest-to-scale job (deciding where words go) is a small, structured choice, not long-form writing. Built: any OpenAI-compatible endpoint works as a provider (`src/host/ai/compat.ts`), including Ollama and LM Studio on your Mac, llama.cpp or MLX servers, and hosted open models on OpenRouter, Groq or Together.
+
+**What makes it work (and what would sink it):**
+
+| Factor | Reality | What Phlo does |
+|---|---|---|
+| **Output tokens dominate local speed** | On a laptop, prompt processing is fast and generation is slow. A plan that rewrites every sentence (~300 tokens) can take several seconds; a plan with only ids and labels (~30 tokens) is a fraction of that. | **Route mode** (built): the open model only decides placement; Phlo cleans the words with its own rules. Rewriting (splits, mind changes) still asks the model for text. |
+| **Prompt prefix reuse** | Local servers can reuse cached work for an unchanged prompt prefix. | The prompt puts the fixed instructions and the outline first and the new words last, so only the new words are processed fresh. Keep the model loaded (`OLLAMA_KEEP_ALIVE=1h`). |
+| **Structured output** | Ollama, LM Studio and llama.cpp support JSON-schema-constrained output; small models still slip sometimes. | A strict `json_schema` request, zod validation, one repair turn, `<think>` and fence stripping, then the local fallback. Tested against a fake server. |
+| **The Mac** | Justin's machine is a MacBook Air: fanless, so long sessions throttle, and RAM caps model size. A 4–8B model (≈3–6 GB at 4-bit) is realistic; 20B+ needs 24 GB+ and runs warm. | Recommend starting with a 4B–8B instruct model. The eval tells us whether it's good enough. |
+| **Quality** | Small open models are weaker at nuanced judgment and rewriting, and fine at classification. | Use them for **routing**, and keep ChatGPT for **forming** (structure from nothing, Turn into, agents). This is the per-job model choice in EXPRESSION_FOUNDATION §6.2. |
+| **Distribution** | Bundling a multi-GB model makes the app huge. | Don't bundle. Detect Ollama or LM Studio and use them; later, a one-click "download a model" in Your AI. |
+| **Licenses** | Vary (Apache 2.0 for Qwen and gpt-oss; custom terms for Llama and Gemma). | Fine for personal use. Check before shipping a model inside the app. |
+
+**Candidates to evaluate** (check current versions before choosing): Qwen3 4B / 8B, Gemma 3 4B / 12B, Llama 3.x 8B, gpt-oss-20b (needs more RAM), Mistral Small. Run each through the goldens in route mode and keep the best score per second.
+
+**The architecture this points to: a cascade by job.**
+```
+explicit command ─► local rules            (<5 ms)
+where does it go ─► open model on the Mac  (route mode, small output)
+how should it read / new structure / Turn into / agents ─► ChatGPT (or any frontier model)
+anything slow or failing ─► local rules, words stay safe
+```
+Each job gets the cheapest model that passes its goldens. Privacy improves too: in route mode, most of a meeting never leaves the Mac.
+
 ## 7. Train our own model?
 
 **No, not now.**
@@ -99,11 +119,12 @@ Both on-device pieces need macOS 26 on Apple Silicon. They'd reach Phlo through 
 - **No data:** we have zero labeled sessions. The goldens and traces (§5.6) are how we'd get some.
 - **Cost on a $20 plan:** training and hosting a model costs far more than the plan, and adds a deployment problem.
 
-**When to revisit:** after a few hundred real sessions, *if* the eval shows routing quality is fine but latency or the usage window is still the bottleneck. Then the move is to distill: fine-tune a small adapter for the on-device model on accepted settles, so routing is free and instant and ChatGPT only does rewriting. Apple's on-device model is designed to take adapters, so this needs no server.
+**When to revisit:** after a few hundred real sessions, *if* the eval shows routing is the weak or slow link. Open models make this realistic in a way it wasn't for Cursor: **fine-tune a small LoRA adapter on an open 4–8B model** with the accepted and undone settles from traces, on the Mac itself (MLX) or for a few dollars of rented GPU time. That's "our own model" at hobby-project cost: a router trained on exactly how you organize, running free and offline. Apple's on-device model also accepts adapters.
 
 ## 8. What changed tonight
 
 - ChatGPT through Codex is the default provider again, as in the prototype: locked down (read-only, no shell, no web, no user config), schema-constrained, ChatGPT sign-in only (API keys stripped from its environment).
 - Plan-limit errors switch to local settling for 30 minutes; calls in the last 5 hours are counted.
+- Any OpenAI-compatible model (open models via Ollama, LM Studio, OpenRouter…) with route mode: `PHLO_MODEL=qwen3:8b npm run eval -- --open`.
 - The eval runs against ChatGPT: `npm run eval -- --chatgpt` (or `PHLO_MODEL=… PHLO_REASONING=minimal` to compare).
 - The Codex flags were checked against the current CLI (0.170): all parse. Real runs need your sign-in, so the ChatGPT path is untested here.

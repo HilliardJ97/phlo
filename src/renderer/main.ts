@@ -108,8 +108,14 @@ app.innerHTML = `
   <dialog class="settings" id="settings">
     <form method="dialog">
       <h2>Your AI</h2>
-      <label class="label">Settle with<select name="provider"><option value="chatgpt">ChatGPT · your plan, through Codex</option><option value="claude">Claude · API key</option><option value="local">On this Mac only · fast rules</option></select></label>
+      <label class="label">Settle with<select name="provider"><option value="chatgpt">ChatGPT · your plan, through Codex</option><option value="claude">Claude · API key</option><option value="compat">Open model · Ollama, LM Studio, OpenRouter…</option><option value="local">On this Mac only · fast rules</option></select></label>
       <p class="note" id="provider-note"></p>
+      <div id="compat-fields">
+        <label class="label">Endpoint<input name="compatBaseUrl" autocomplete="off" placeholder="http://127.0.0.1:11434/v1" /></label>
+        <label class="label">Model<input name="compatModel" autocomplete="off" placeholder="qwen3:8b" /></label>
+        <label class="label">Model does<select name="compatMode"><option value="route">Placement only · fastest (Phlo cleans the words)</option><option value="full">Placement and wording</option></select></label>
+        <label class="label">Key (hosted endpoints only)<input type="password" name="compatKey" autocomplete="off" placeholder="Leave empty for a model on this Mac" /></label>
+      </div>
       <label class="label">Claude key<input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-…" /></label>
       <p class="note" id="claude-note"></p>
       <label class="label">Transcription key (OpenAI)<input type="password" name="openaiKey" autocomplete="off" placeholder="sk-…" /></label>
@@ -968,6 +974,13 @@ async function openSettings() {
   const f = dialog.querySelector("form")!;
   (f.elements.namedItem("theme") as HTMLSelectElement).value = settings.theme;
   (f.elements.namedItem("provider") as HTMLSelectElement).value = settings.provider;
+  (f.elements.namedItem("compatBaseUrl") as HTMLInputElement).value = settings.compatBaseUrl;
+  (f.elements.namedItem("compatModel") as HTMLInputElement).value = settings.compatModel;
+  (f.elements.namedItem("compatMode") as HTMLSelectElement).value = settings.compatMode;
+  (f.elements.namedItem("compatKey") as HTMLInputElement).value = "";
+  const showCompat = () => ($("compat-fields").style.display = (f.elements.namedItem("provider") as HTMLSelectElement).value === "compat" ? "block" : "none");
+  (f.elements.namedItem("provider") as HTMLSelectElement).onchange = showCompat;
+  showCompat();
   const ai = settings.ai;
   $("provider-note").textContent =
     settings.provider === "chatgpt"
@@ -976,6 +989,8 @@ async function openSettings() {
         : ai.coolingUntil
           ? "Plan limit reached. Settling on this Mac until it resets."
           : "Install Codex and run codex login with your ChatGPT account. Until then, Phlo settles with fast rules."
+      : settings.provider === "compat"
+        ? "Any OpenAI-compatible model. On a Mac: install Ollama, then ollama pull qwen3:8b."
       : settings.provider === "claude"
         ? settings.claude ? "Connected" : "Add a Claude key below."
         : "Nothing leaves this Mac. Placement is simpler.";
@@ -996,7 +1011,12 @@ dialog.addEventListener("close", async () => {
   const patch: Record<string, string> = {
     theme: (f.elements.namedItem("theme") as HTMLSelectElement).value,
     provider: (f.elements.namedItem("provider") as HTMLSelectElement).value,
+    compatBaseUrl: (f.elements.namedItem("compatBaseUrl") as HTMLInputElement).value.trim(),
+    compatModel: (f.elements.namedItem("compatModel") as HTMLInputElement).value.trim(),
+    compatMode: (f.elements.namedItem("compatMode") as HTMLSelectElement).value,
   };
+  const ck2 = (f.elements.namedItem("compatKey") as HTMLInputElement).value.trim();
+  if (ck2) patch.compatKey = ck2;
   const ck = (f.elements.namedItem("claudeKey") as HTMLInputElement).value.trim();
   const ok = (f.elements.namedItem("openaiKey") as HTMLInputElement).value.trim();
   if (ck) patch.claudeKey = ck;

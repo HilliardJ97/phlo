@@ -11,6 +11,7 @@ import { COVER_PAIRINGS, emptyDraft, type Draft, type PublishedPiece } from "../
 import type { SettleRequest, SettleResponse } from "../engine/settle";
 import { ClaudeProvider, DEFAULT_MODEL } from "./ai/claude";
 import { CodexProvider } from "./ai/codex";
+import { CompatProvider } from "./ai/compat";
 import type { SettleProvider } from "./ai/provider";
 import { Orchestrator } from "./ai/orchestrator";
 import { Store } from "./store";
@@ -29,12 +30,17 @@ export const memoryCipher: Cipher = {
   decrypt: () => "",
 };
 
-export type ProviderChoice = "chatgpt" | "claude" | "local";
+export type ProviderChoice = "chatgpt" | "claude" | "compat" | "local";
 
 interface Settings {
   provider: ProviderChoice;
   /** ChatGPT model id for Codex; empty = the plan's default. */
   chatgptModel: string;
+  /** Any OpenAI-compatible endpoint: Ollama, LM Studio, OpenRouter… */
+  compatBaseUrl: string;
+  compatModel: string;
+  compatMode: "route" | "full";
+  compatKeyEnc?: string;
   theme: "paper" | "sumi" | "system";
   model: string;
   claudeKeyEnc?: string;
@@ -42,13 +48,21 @@ interface Settings {
   lastDraftId?: string;
 }
 
-const DEFAULT_SETTINGS: Settings = { provider: "chatgpt", chatgptModel: "", theme: "system", model: DEFAULT_MODEL };
+const DEFAULT_SETTINGS: Settings = {
+  provider: "chatgpt",
+  chatgptModel: "",
+  compatBaseUrl: "http://127.0.0.1:11434/v1",
+  compatModel: "",
+  compatMode: "route",
+  theme: "system",
+  model: DEFAULT_MODEL,
+};
 
 export class HostApi {
   readonly store: Store;
   readonly orchestrator: Orchestrator;
   private settings: Settings = DEFAULT_SETTINGS;
-  private memKeys: { claude?: string; openai?: string } = {};
+  private memKeys: { claude?: string; openai?: string; compat?: string } = {};
 
   constructor(
     dataDir: string,
@@ -72,8 +86,22 @@ export class HostApi {
     let p: SettleProvider | null = null;
     if (s.provider === "chatgpt") p = new CodexProvider(s.chatgptModel || "", "low");
     else if (s.provider === "claude") p = new ClaudeProvider(() => this.claudeKey(), s.model || DEFAULT_MODEL);
+    else if (s.provider === "compat") p = new CompatProvider({ baseUrl: s.compatBaseUrl, model: s.compatModel, apiKey: this.compatKey(), mode: s.compatMode });
     // A process per Codex call is slower than an API: give it more room before falling back.
-    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 20_000 : 9000);
+    // Codex starts a process per call and local models prefill on your Mac: give both more room.
+    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 20_000 : s.provider === "compat" ? 15_000 : 9000);
+  }
+
+  private compatKey(): string | undefined {
+    if (this.memKeys.compat) return this.memKeys.compat;
+    if (this.settings.compatKeyEnc && this.cipher.secure) {
+      try {
+        return this.cipher.decrypt(this.settings.compatKeyEnc);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   private claudeKey(): string | undefined {
@@ -188,21 +216,28 @@ export class HostApi {
       claude: !!this.claudeKey(),
       provider: this.settings.provider,
       chatgptModel: this.settings.chatgptModel,
+      compatBaseUrl: this.settings.compatBaseUrl,
+      compatModel: this.settings.compatModel,
+      compatMode: this.settings.compatMode,
       openai: !!this.openaiKey(),
       secureStorage: this.cipher.secure,
       ai: this.orchestrator.status(),
     };
   }
 
-  async setSettings(patch: { theme?: Settings["theme"]; claudeKey?: string; openaiKey?: string; model?: string; provider?: ProviderChoice; chatgptModel?: string }) {
+  async setSettings(patch: { theme?: Settings["theme"]; claudeKey?: string; openaiKey?: string; model?: string; provider?: ProviderChoice; chatgptModel?: string; compatBaseUrl?: string; compatModel?: string; compatMode?: "route" | "full"; compatKey?: string }) {
     const next = { ...this.settings };
     if (patch.theme) next.theme = patch.theme;
     if (patch.model) next.model = patch.model;
-    if (patch.provider && ["chatgpt", "claude", "local"].includes(patch.provider)) next.provider = patch.provider;
+    if (patch.provider && ["chatgpt", "claude", "compat", "local"].includes(patch.provider)) next.provider = patch.provider;
+    if (patch.compatBaseUrl !== undefined && /^https?:\/\/[^\s]{1,200}$/.test(patch.compatBaseUrl)) next.compatBaseUrl = patch.compatBaseUrl;
+    if (patch.compatModel !== undefined && /^[\w.:/@-]{0,128}$/.test(patch.compatModel)) next.compatModel = patch.compatModel;
+    if (patch.compatMode === "route" || patch.compatMode === "full") next.compatMode = patch.compatMode;
     if (patch.chatgptModel !== undefined && /^[a-z0-9.\-]{0,64}$/i.test(patch.chatgptModel)) next.chatgptModel = patch.chatgptModel;
     for (const [field, enc, mem] of [
       ["claudeKey", "claudeKeyEnc", "claude"],
       ["openaiKey", "openaiKeyEnc", "openai"],
+      ["compatKey", "compatKeyEnc", "compat"],
     ] as const) {
       const v = patch[field];
       if (v === undefined) continue;

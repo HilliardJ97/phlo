@@ -352,7 +352,8 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
       issues.push(`unknown wet id ${p.wet_id}`);
       continue;
     }
-    const text = p.text.trim();
+    // Empty text = route-only: Phlo cleans the speaker's words deterministically.
+    const text = p.text.trim() || (p.kind === "question" ? cleanSpeech(wet.text).replace(/[.!]+$/, "").replace(/\?*$/, "?") : ensureSentence(cleanSpeech(wet.text)));
     if (!text) continue;
     if (p.under === "next" && !nextId) {
       nextId = newId("h");

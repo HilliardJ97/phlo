@@ -27,6 +27,12 @@ Roles
 
 Every wet id must appear in placements or consumed. Use only ids that appear in the input.`;
 
+/** Appended for small/fast models: decide placement only, leave the wording to Phlo. */
+export const ROUTE_ONLY = `ROUTE-ONLY MODE: decide where words go, not how they read.
+- For a placement that takes a whole wet item as it is, set text to "" (Phlo cleans the words itself).
+- Write text only when you split one wet item into several placements, or for revisions.
+- Keep the JSON short. No explanations.`;
+
 export function settleUserMessage(req: SettleRequest): string {
   const outline = req.outline.length
     ? req.outline

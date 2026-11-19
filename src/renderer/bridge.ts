@@ -13,8 +13,11 @@ export interface HostSettings {
   claude: boolean;
   openai: boolean;
   secureStorage: boolean;
-  provider: "chatgpt" | "claude" | "local";
+  provider: "chatgpt" | "claude" | "compat" | "local";
   chatgptModel: string;
+  compatBaseUrl: string;
+  compatModel: string;
+  compatMode: "route" | "full";
   ai: { provider: string; model: string | null; deadlineMs: number; coolingUntil: number | null; callsLast5h: number };
 }
 

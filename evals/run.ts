@@ -6,6 +6,9 @@
  *   npm run eval                      # ChatGPT via Codex if signed in (or Claude if ANTHROPIC_API_KEY), else local
  *   npm run eval -- --chatgpt         # ChatGPT plan through Codex (~35 requests: mind your 5-hour window)
  *   PHLO_MODEL=<id> PHLO_REASONING=minimal npm run eval -- --chatgpt   # compare models / effort
+ *   PHLO_MODEL=qwen3:8b npm run eval -- --open                          # open model via Ollama (route mode)
+ *   PHLO_MODEL=qwen3:8b PHLO_MODE=full npm run eval -- --open           # open model also rewrites
+ *   PHLO_BASE_URL=https://openrouter.ai/api/v1 PHLO_API_KEY=… PHLO_MODEL=<id> npm run eval -- --open
  *   npm run eval -- --local           # force the local route
  *   npm run eval -- --only interview  # one scenario
  *
@@ -21,6 +24,7 @@ import { emptyDraft, type Block } from "../src/engine/model";
 import { buildRequest, compilePlan, headingOf, noveltyRatio, NEXT_RE } from "../src/engine/settle";
 import { ClaudeProvider } from "../src/host/ai/claude";
 import { CodexProvider } from "../src/host/ai/codex";
+import { CompatProvider } from "../src/host/ai/compat";
 import type { SettleProvider } from "../src/host/ai/provider";
 import { Orchestrator } from "../src/host/ai/orchestrator";
 import { SCENARIOS, type Check, type Scenario } from "./goldens";
@@ -28,18 +32,28 @@ import { SCENARIOS, type Check, type Scenario } from "./goldens";
 const args = process.argv.slice(2);
 const forceLocal = args.includes("--local");
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-const want = forceLocal ? "local" : args.includes("--claude") ? "claude" : args.includes("--chatgpt") ? "chatgpt" : "auto";
+const want = forceLocal ? "local" : args.includes("--claude") ? "claude" : args.includes("--chatgpt") ? "chatgpt" : args.includes("--open") ? "open" : "auto";
 const key = process.env.ANTHROPIC_API_KEY;
 function pick(): SettleProvider | null {
   if (want === "local") return null;
+  if (want === "open") {
+    const model = process.env.PHLO_MODEL;
+    if (!model) return null;
+    return new CompatProvider({
+      baseUrl: process.env.PHLO_BASE_URL || "http://127.0.0.1:11434/v1",
+      model,
+      apiKey: process.env.PHLO_API_KEY,
+      mode: (process.env.PHLO_MODE as "route" | "full") || "route",
+    });
+  }
   if (want === "claude" || (want === "auto" && key)) return key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
   const codex = new CodexProvider(process.env.PHLO_MODEL || "", (process.env.PHLO_REASONING as "minimal" | "low" | "medium") || "low");
   return codex.available() ? codex : null;
 }
 const provider = pick();
-if (want !== "local" && !provider) console.log(`(${want === "claude" ? "no ANTHROPIC_API_KEY" : "Codex not installed or not signed in"}: falling back to local rules)\n`);
+if (want !== "local" && !provider) console.log(`(${want === "claude" ? "no ANTHROPIC_API_KEY" : want === "open" ? "set PHLO_MODEL" : "Codex not installed or not signed in"}: falling back to local rules)\n`);
 const orch = new Orchestrator(provider, { deadlineMs: 60_000 });
-const route = provider ? `${provider.name}${provider.model ? `-${provider.model}` : ""}` : "local";
+const route = provider ? `${provider.name}${provider.model ? `-${provider.model}` : ""}${want === "open" ? `-${process.env.PHLO_MODE || "route"}` : ""}` : "local";
 
 const lc = (s: string) => s.toLowerCase();
 const has = (text: string, words: string[]) => words.every((w) => lc(text).includes(lc(w)));
