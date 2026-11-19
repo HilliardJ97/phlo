@@ -79,6 +79,8 @@ export class HostApi {
   ) {
     this.store = new Store(dataDir);
     this.orchestrator = new Orchestrator(null);
+    this.orchestrator.recall = async (draftId, text) =>
+      (await this.store.search(draftId, text, 8)).map((x) => ({ id: x.blockId, text: x.text, under: null }));
   }
 
   async init() {

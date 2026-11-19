@@ -13,6 +13,7 @@
  * measurable rather than anecdotal.
  */
 import { isExplicitCommand, localPlan } from "../../engine/local";
+import { assembleContext, wantsRecall, type RecallItem } from "../../engine/context";
 import { enforceScribe, withCorrectionTarget, type SettlePlan, type SettleRequest, type SettleResponse } from "../../engine/settle";
 import type { AskRequest, SettleProvider } from "./provider";
 
@@ -42,6 +43,8 @@ export class Orchestrator {
   /** Per-provider cool-down after errors a retry won't fix (signed out, plan limit, no credit). */
   private coolUntil = new Map<SettleProvider, number>();
   private calls: number[] = [];
+  /** Recall source (the store's full-text index), set by the host. */
+  recall: ((draftId: string, text: string) => Promise<RecallItem[]>) | null = null;
 
   constructor(provider: SettleProvider | null, opts: OrchestratorOptions = {}) {
     this.deadlineMs = opts.deadlineMs ?? 9000;
@@ -115,6 +118,11 @@ export class Orchestrator {
     const ready = this.ready();
     if (allCommands || !ready.length) return finish(local(), "local");
 
+    // Fixed-size packet: the model never sees an ever-growing page.
+    const said = req.wet.map((w) => w.text).join(" ");
+    const hits = this.recall && wantsRecall(said) ? await this.recall(req.draftId, said).catch(() => []) : [];
+    const packet = assembleContext(req, hits);
+
     const timer = setTimeout(() => ctrl.abort("deadline"), this.deadlineMs);
     const notes: string[] = [];
     try {
@@ -124,7 +132,7 @@ export class Orchestrator {
         this.calls.push(Date.now());
         if (this.calls.length > 2000) this.calls.splice(0, 1000);
         try {
-          const plan = await p.settle(req, { signal: ctrl.signal });
+          const plan = await p.settle(packet, { signal: ctrl.signal });
           return finish(plan, "model", `${p.name}${p.model ? ` · ${p.model}` : ""}`, notes.length ? notes.join("; ") : undefined);
         } catch (err) {
           if (ctrl.signal.aborted) throw err;

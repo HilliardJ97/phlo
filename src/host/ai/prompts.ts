@@ -2,7 +2,8 @@
  * Prompts are frozen strings so the system prefix caches across requests.
  * Anything per-request (outline, wet words) goes in the user message.
  */
-import { speechHints, type SettleRequest } from "../../engine/settle";
+import type { Packet } from "../../engine/context";
+import { speechHints } from "../../engine/settle";
 
 export const SETTLE_SYSTEM = `You are the settling engine inside Phlo, a page that organizes itself while a person thinks out loud.
 
@@ -36,12 +37,17 @@ export const ROUTE_ONLY = `ROUTE-ONLY MODE: decide where words go, not how they 
 - Write text only when you split one wet item into several placements, or for revisions.
 - Keep the JSON short. No explanations.`;
 
-export function settleUserMessage(req: SettleRequest): string {
+export function settleUserMessage(req: Packet): string {
+  const folded = (id: string) => {
+    const d = req.digests?.[id];
+    return d ? `\n   (${d.hidden} more lines${d.digest ? `: ${d.digest}` : ""})` : "";
+  };
   const outline = req.outline.length
     ? req.outline
-        .map((o) => (o.kind === "heading" ? `## [${o.id}] ${o.text}` : `   [${o.id}] (${o.kind}) ${o.text}`))
+        .map((o) => (o.kind === "heading" ? `## [${o.id}] ${o.text}${folded(o.id)}` : `   [${o.id}] (${o.kind}) ${o.text}`))
         .join("\n")
     : "(empty page)";
+  const recall = req.recall?.map((r) => `   [${r.id}]${r.under ? ` (under ${r.under})` : ""} ${r.text}`).join("\n");
   const wet = req.wet
     .map((w) => {
       const h = speechHints(w.text);
@@ -58,6 +64,9 @@ export function settleUserMessage(req: SettleRequest): string {
     "",
     "OUTLINE:",
     outline,
+    "",
+    recall ? "\nRECALL (earlier lines you may revise by id):" : "",
+    recall ?? "",
     "",
     "WET:",
     wet,
