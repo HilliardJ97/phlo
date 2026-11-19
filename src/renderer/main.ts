@@ -556,12 +556,18 @@ class Settler {
       ops.push({ t: "move", id: caret.id, after: lastPlaced });
     }
     const txId = newId("tx");
-    const out = engine.commit({ id: txId, actor: "phlo", label: compiled.structural.length ? compiled.structural.join(" · ") : "Settle", ops });
+    // Partial apply: groups that went stale (you typed there) are dropped and re-asked; the rest lands now.
+    const out = engine.commitPartial({ id: txId, actor: "phlo", label: compiled.structural.length ? compiled.structural.join(" · ") : "Settle", ops });
     if (!out.ok) {
       if (++this.conflicts < 4) this.again = true;
       return;
     }
-    this.conflicts = 0;
+    if (out.dropped.length) {
+      if (++this.conflicts < 4) this.again = true;
+      const live = new Set(Object.keys(out.tx.touched));
+      compiled.settledIds = compiled.settledIds.filter((id) => live.has(id));
+      compiled.structural = [];
+    } else this.conflicts = 0;
     for (const id of compiled.settledIds.slice().reverse()) recentSettled.unshift(id);
     recentSettled.splice(12);
     const placed = compiled.settledIds.filter((id) => engine.block(id)?.tab !== "tangent").at(-1);

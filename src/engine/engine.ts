@@ -88,6 +88,38 @@ function clone<T>(v: T): T {
   return structuredClone(v);
 }
 
+function blockRefs(op: Op): string[] {
+  switch (op.t) {
+    case "insert":
+    case "restore":
+      return op.after ? [op.block.id, op.after] : [op.block.id];
+    case "move":
+    case "unpark":
+      return op.after ? [op.id, op.after] : [op.id];
+    case "update":
+    case "park":
+    case "delete":
+      return [op.id];
+    default:
+      return [];
+  }
+}
+
+/** Group index per op: union-find over the block ids each op names. */
+export function dependencyGroups(ops: Op[]): number[] {
+  const parent = ops.map((_, i) => i);
+  const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+  const owner = new Map<string, number>();
+  ops.forEach((op, i) => {
+    for (const id of blockRefs(op)) {
+      const j = owner.get(id);
+      if (j === undefined) owner.set(id, i);
+      else parent[find(i)] = find(j);
+    }
+  });
+  return ops.map((_, i) => find(i));
+}
+
 export class DocEngine {
   private draft: Draft;
   private listeners = new Set<Listener>();
@@ -211,6 +243,26 @@ export class DocEngine {
     this.journal.push(committed);
     this.emit(committed);
     return { ok: true, version, tx: committed };
+  }
+
+  /**
+   * Commit the parts of a transaction that still hold. Ops are split into
+   * dependency groups (ops that name the same block, as target or anchor,
+   * share a group); a group with any stale or missing precondition is dropped
+   * whole, the rest commit as one transaction. Nothing is rebased: the caller
+   * re-asks for what was dropped. Ops without a block (meta, cards, refs)
+   * stand alone.
+   */
+  commitPartial(tx: Transaction): CommitResult & { dropped: Op[] } {
+    const groups = dependencyGroups(tx.ops);
+    const conflicts = this.check(tx.ops);
+    if (!conflicts.length) return { ...this.commit(tx), dropped: [] };
+    const bad = new Set(conflicts.map((c) => groups[c.opIndex]));
+    const keep = tx.ops.filter((_, i) => !bad.has(groups[i]));
+    const dropped = tx.ops.filter((_, i) => bad.has(groups[i]));
+    if (!keep.length) return { ok: false, conflicts, dropped };
+    const res = this.commit({ ...tx, ops: keep });
+    return res.ok ? { ...res, dropped } : { ...res, dropped: tx.ops };
   }
 
   /**

@@ -331,3 +331,37 @@ describe("settle", () => {
     expect(e.block("h2")!.theme).toBe("cobalt");
   });
 });
+
+describe("partial apply", () => {
+  it("drops only the stale group and commits the rest", () => {
+    const e = seeded();
+    const ids = e.state.blocks.map((b) => b.id);
+    const [a, b] = ids;
+    const revA = e.block(a)!.rev;
+    const revB = e.block(b)!.rev;
+    // You type in `a` after the plan was made.
+    e.commit({ id: "typing", actor: "user", label: "Type", ops: [{ t: "update", id: a, patch: { text: "edited" } }] });
+    const out = e.commitPartial({
+      id: "plan",
+      actor: "phlo",
+      label: "Settle",
+      ops: [
+        { t: "update", id: a, patch: { text: "stale rewrite" }, expectRev: revA },
+        { t: "insert", block: { id: "n1", kind: "paragraph", text: "after a", wet: false, rev: 0, origin: "typed" }, after: a },
+        { t: "update", id: b, patch: { wet: false }, expectRev: revB },
+      ],
+    });
+    expect(out.ok).toBe(true);
+    expect(out.dropped.length).toBe(2);
+    expect(e.block(a)!.text).toBe("edited");
+    expect(e.block("n1")).toBeUndefined();
+    expect(e.block(b)!.wet).toBe(false);
+  });
+
+  it("is a plain commit when nothing is stale", () => {
+    const e = seeded();
+    const a = e.state.blocks[0];
+    const out = e.commitPartial({ id: "p", actor: "phlo", label: "x", ops: [{ t: "update", id: a.id, patch: { text: "y" }, expectRev: a.rev }] });
+    expect(out.ok && out.dropped.length === 0).toBe(true);
+  });
+});
