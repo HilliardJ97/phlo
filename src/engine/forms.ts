@@ -185,7 +185,7 @@ export interface FormSuggestion {
 export function suggestForm(blocks: Block[], dismissed: Set<string>): FormSuggestion | null {
   for (let i = 0; i < blocks.length; i++) {
     const b = blocks[i];
-    if (b.wet || dismissed.has(b.id) || (b.kind !== "numbered" && b.kind !== "bullet")) continue;
+    if (b.wet || dismissed.has(b.id) || (b.kind !== "numbered" && b.kind !== "bullet" && b.kind !== "paragraph")) continue;
     if (i > 0 && blocks[i - 1].kind === b.kind && !blocks[i - 1].wet) continue; // only at the start of a run
     const run = listRun(blocks, b.id).filter((x) => !x.wet && x.text.trim());
     if (run.length < 3) continue;
@@ -193,7 +193,9 @@ export function suggestForm(blocks: Block[], dismissed: Set<string>): FormSugges
       return { id: b.id, ids: run.map((x) => x.id), kind: "flow", text: `These ${run.length} steps read like a flow.`, action: "Make a flow" };
     }
     const shaped = run.filter((x) => splitItem(x.text).length >= 2).length;
-    if (shaped >= Math.max(2, Math.ceil(run.length * 0.66))) {
+    // Plain lines must all carry the "Name: detail" shape; bullets need two thirds.
+    const enough = b.kind === "paragraph" ? shaped === run.length && run.every((x) => x.text.length < 140) : shaped >= Math.max(2, Math.ceil(run.length * 0.66));
+    if (enough) {
       return { id: b.id, ids: run.map((x) => x.id), kind: "table", text: `These ${run.length} items compare well side by side.`, action: "Make a table" };
     }
   }

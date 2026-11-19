@@ -105,6 +105,8 @@ describe("Turn into", () => {
     const steps = [b("1", "numbered", "Upload"), b("2", "numbered", "Pick"), b("3", "numbered", "Order")];
     expect(suggestForm(steps, new Set())).toMatchObject({ kind: "flow" });
     expect(suggestForm([b("x", "bullet", "just a thought"), b("y", "bullet", "another"), b("z", "bullet", "third")], new Set())).toBeNull();
+    expect(suggestForm([b("p1", "paragraph", "Notion: $10, cloud"), b("p2", "paragraph", "Granola: $14, meetings"), b("p3", "paragraph", "Otter: free, transcripts")], new Set())).toMatchObject({ kind: "table" });
+    expect(suggestForm([b("q1", "paragraph", "We think pricing matters."), b("q2", "paragraph", "Notion: $10"), b("q3", "paragraph", "Users want speed.")], new Set())).toBeNull();
   });
 
   it("text forms are a kind change only", () => {
