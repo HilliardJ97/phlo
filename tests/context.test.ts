@@ -60,3 +60,33 @@ describe("context packet", () => {
     expect(wantsRecall("like I said earlier, members first")).toBe(true);
   });
 });
+
+import { contradictions, detectAim, detectInstruction, ledgerMatches } from "../src/engine/memory";
+import { DocEngine } from "../src/engine/engine";
+
+describe("memory keeper", () => {
+  it("detects aim and standing instructions, not ordinary content", () => {
+    expect(detectAim("The goal of this is to land the product sense interview")).toBe("land the product sense interview");
+    expect(detectInstruction("keep it to three pillars")).toBe("Keep it to three pillars");
+    expect(detectInstruction("Let's call them members.")).toBe("Call them members");
+    expect(detectInstruction("We keep members for about three years")).toBeNull();
+  });
+
+  it("pushes Ledger lines into the request and finds contradictions", () => {
+    const d = longDraft();
+    d.blocks.push(blk("x", "paragraph", "The starter plan is sixty dollars"));
+    expect(ledgerMatches(d.blocks, "what about the starter plan").map((e) => e.blockId)).toContain("b1_2");
+    const c = contradictions(d.blocks).find((c) => c.key === "starter plan");
+    expect(c?.values.map((v) => v.value).sort()).toEqual(["40dollars", "60dollars"]);
+    const req = buildRequest(d, ["w1"], { currentHeadingId: "h59", recent: [] });
+    expect(assembleContext(req).recall?.[0].id).toBe("b1_2");
+  });
+
+  it("memory ops are undoable", () => {
+    const e = new DocEngine(emptyDraft("m"));
+    e.commit({ id: "r", actor: "phlo", label: "Remember", ops: [{ t: "memory.set", item: { id: "aim", kind: "aim", text: "x", refs: [], at: 1 } }] });
+    expect(e.state.memory?.length).toBe(1);
+    e.undoLastBy("phlo");
+    expect(e.state.memory?.length).toBe(0);
+  });
+});

@@ -35,6 +35,7 @@ Every wet id must appear in placements or consumed. Use only ids that appear in 
 export const ROUTE_ONLY = `ROUTE-ONLY MODE: decide where words go, not how they read.
 - For a placement that takes a whole wet item as it is, set text to "" (Phlo cleans the words itself).
 - Write text only when you split one wet item into several placements, or for revisions.
+- A wet item that only states the aim or a standing instruction ("keep it to three pillars", "call them members") is for you, not the page: list it in consumed.
 - Keep the JSON short. No explanations.`;
 
 export function settleUserMessage(req: Packet): string {
@@ -58,6 +59,8 @@ export function settleUserMessage(req: Packet): string {
   return [
     `ROLE: ${req.role.toUpperCase()}`,
     `TITLE: ${req.title ? req.title : "(none)"}${req.titleAuto ? "" : " (set by the person, do not change)"}`,
+    req.memory?.aim ? `AIM: ${req.memory.aim}` : "",
+    req.memory?.instructions.length ? `STANDING INSTRUCTIONS (follow them): ${req.memory.instructions.join("; ")}` : "",
     `CURRENT SECTION: ${req.currentHeadingId ?? "(none)"}`,
     `RECENT (newest first): ${req.recent.join(", ") || "(none)"}`,
     req.references.length ? `REFERENCES: ${req.references.join("; ")}` : "",

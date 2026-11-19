@@ -124,6 +124,19 @@ export interface Reference {
   addedAt: number;
 }
 
+/**
+ * What Phlo remembers about a draft. Aim and instructions are yours (said or
+ * edited); entities and digests are derived and rebuildable.
+ */
+export interface MemoryItem {
+  id: string;
+  kind: "aim" | "instruction";
+  text: string;
+  /** Block ids or utterance ids this came from. */
+  refs: string[];
+  at: number;
+}
+
 /** A side card: Partner's single stall question, or a pending proposal. */
 export interface Card {
   id: string;
@@ -145,6 +158,8 @@ export interface Draft {
   transcript: TranscriptSegment[];
   references: Reference[];
   cards: Card[];
+  /** Aim and standing instructions. Optional: drafts saved before memory have none. */
+  memory?: MemoryItem[];
   /** Document version: bumps on every committed transaction. */
   version: number;
   createdAt: number;
@@ -184,6 +199,7 @@ export function emptyDraft(id: string, now = Date.now()): Draft {
     transcript: [],
     references: [],
     cards: [],
+    memory: [],
     version: 0,
     createdAt: now,
     updatedAt: now,

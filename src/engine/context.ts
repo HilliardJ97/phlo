@@ -60,7 +60,9 @@ function outlineChars(items: OutlineItem[]): number {
   return items.reduce((n, o) => n + o.text.length + o.id.length + 16, 0);
 }
 
-export function assembleContext(req: SettleRequest, hits: RecallItem[] = []): Packet {
+export function assembleContext(req: SettleRequest, ftsHits: RecallItem[] = []): Packet {
+  // Ledger matches first (pushed by the Memory keeper), then full-text hits.
+  const hits = [...(req.memory?.recall ?? []), ...ftsHits];
   // Group blocks by section (null = before the first heading).
   const sections = new Map<string | null, OutlineItem[]>();
   const headings: OutlineItem[] = [];

@@ -6,6 +6,7 @@ import { DocEngine, type Op } from "../engine/engine";
 import { newId } from "../engine/ids";
 import { emptyDraft, ISLAND_KINDS, sections, substantiveSectionCount, type Block, type Draft, type PublishedPiece, type Role } from "../engine/model";
 import { buildRequest, compilePlan, contentWords, headingOf, type SettleResponse } from "../engine/settle";
+import { contradictions, detectAim, detectInstruction, ledger, memoryItem } from "../engine/memory";
 import { host, HostError, type HostSettings } from "./bridge";
 import { Editor, embedSrc, inPage } from "./editor/view";
 import { chartSummary, FORM_OPTIONS, suggestForm, turnIntoOps, type FormOption, type MediaAction } from "../engine/forms";
@@ -55,6 +56,7 @@ app.innerHTML = `
     <div class="group"><div class="label">Drafts</div><div id="draft-list"></div><button class="side-link muted" id="new-draft-2">New draft</button></div>
     <div class="group"><div class="label" id="pub-label">Published</div><div id="pub-list"></div></div>
     <div class="group"><div class="label">References · this draft</div><div id="ref-list" style="display:flex;flex-direction:column;gap:8px"></div></div>
+    <div class="group"><div class="label">What Phlo remembers</div><div id="mem-list" class="mem-list"></div></div>
     <div class="foot"><button class="side-link" id="your-ai">Your AI</button></div>
   </nav>
   <main class="main" id="main">
@@ -273,6 +275,7 @@ function render(settled?: string[]) {
   $("role-scribe").setAttribute("aria-pressed", String(d.role === "scribe"));
   renderTabs();
   renderRefs();
+  renderMemory();
   if ($("transcript").classList.contains("open")) renderTranscript();
 }
 
@@ -368,6 +371,74 @@ function renderRefs() {
       card.appendChild(a);
     } else card.appendChild(h("div", {}, r.title));
     list.appendChild(card);
+  }
+}
+
+function renderMemory() {
+  const list = $("mem-list");
+  list.innerHTML = "";
+  const mem = engine.state.memory ?? [];
+  const numbers = ledger(engine.state.blocks.filter(inPage));
+  if (!mem.length && !numbers.length) {
+    list.appendChild(h("div", { class: "side-link muted" }, "Say the aim, or “keep it to three pillars”."));
+    return;
+  }
+  for (const m of mem) {
+    const row = h("div", { class: "mem-row" });
+    row.append(h("span", { class: "label" }, m.kind === "aim" ? "Aim" : "Always"));
+    const text = h("span", { class: "mem-text", contenteditable: "true", spellcheck: "false" }, m.text);
+    text.addEventListener("blur", () => {
+      const next = text.textContent?.trim() ?? "";
+      if (next === m.text) return;
+      const ops: Op[] = next ? [{ t: "memory.set", item: { ...m, text: next, at: Date.now() } }] : [{ t: "memory.remove", id: m.id }];
+      engine.commit({ id: newId("tx"), actor: "user", label: next ? "Edit memory" : "Forget", ops });
+    });
+    const forget = h("button", { class: "mem-forget", "aria-label": `Forget ${m.text}` }, "×");
+    forget.addEventListener("click", () => engine.commit({ id: newId("tx"), actor: "user", label: "Forget", ops: [{ t: "memory.remove", id: m.id }] }));
+    row.append(text, forget);
+    list.appendChild(row);
+  }
+  const keys = new Map<string, string[]>();
+  for (const e of numbers) keys.set(e.key, [...new Set([...(keys.get(e.key) ?? []), e.value])]);
+  for (const [key, values] of [...keys].slice(0, 12)) {
+    const row = h("div", { class: "mem-row" });
+    row.append(h("span", { class: "label" }, "Number"), h("span", { class: "mem-text" }, `${key}: ${values.join(" → ")}`));
+    list.appendChild(row);
+  }
+}
+
+/** Aim and standing instructions you just said: remember them, say so once, offer Undo. */
+function rememberFrom(ids: string[]) {
+  const ops: Op[] = [];
+  const have = new Set((engine.state.memory ?? []).map((m) => m.text.toLowerCase()));
+  for (const id of ids) {
+    const b = engine.block(id);
+    if (!b) continue;
+    const aim = detectAim(b.text);
+    const rule = aim ? null : detectInstruction(b.text);
+    const text = aim ?? rule;
+    if (!text || have.has(text.toLowerCase())) continue;
+    have.add(text.toLowerCase());
+    ops.push({ t: "memory.set", item: memoryItem(aim ? "aim" : "instruction", text, [id]) });
+  }
+  if (!ops.length) return;
+  const txId = newId("tx");
+  if (!engine.commit({ id: txId, actor: "phlo", label: "Remember", ops }).ok) return;
+  const said = ops.map((o) => (o.t === "memory.set" ? o.item.text : "")).join(" · ");
+  toast(`Phlo will remember: ${said}`, { label: "Undo", run: () => void engine.undo(txId) }, 6000);
+}
+
+/** Partner asks once when the same thing gets two different numbers. */
+const askedContradictions = new Set<string>();
+function checkContradictions() {
+  if (engine.state.role !== "partner") return;
+  for (const c of contradictions(engine.state.blocks.filter(inPage))) {
+    const sig = `${engine.state.id}:${c.key}:${c.values.map((v) => v.value).join("|")}`;
+    if (askedContradictions.has(sig)) continue;
+    askedContradictions.add(sig);
+    const vals = [...new Set(c.values.map((v) => v.value))];
+    showAsk(`${c.key.charAt(0).toUpperCase()}${c.key.slice(1)}: ${vals.slice(0, -1).join(", ")} or ${vals.at(-1)}?`);
+    return;
   }
 }
 
@@ -518,6 +589,7 @@ class Settler {
     if (!ids.length) return;
     this.inflight = true;
     setSettling(true);
+    rememberFrom(ids);
     const req = buildRequest(engine.snapshot(), ids, { currentHeadingId: currentHeading, recent: recentSettled.slice(0, 5) });
     let res: SettleResponse | null = null;
     try {
@@ -573,6 +645,7 @@ class Settler {
     const placed = compiled.settledIds.filter((id) => engine.block(id)?.tab !== "tangent").at(-1);
     if (placed && talking) currentHeading = headingOf(engine.state.blocks, placed) ?? currentHeading;
     if (compiled.question && engine.state.role === "partner" && talking) showAsk(compiled.question);
+    else checkContradictions();
     render(compiled.settledIds);
     // You asked for a structural change: say exactly what changed, with one-tap undo.
     if (compiled.structural.length) {

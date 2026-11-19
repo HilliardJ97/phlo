@@ -11,7 +11,7 @@
  * undoing a settle restores the wet text without touching what you typed in
  * another section afterwards.
  */
-import type { Block, Card, Draft, Reference, Role, TranscriptSegment } from "./model";
+import type { Block, Card, Draft, MemoryItem, Reference, Role, TranscriptSegment } from "./model";
 
 export type Actor = "user" | "voice" | "phlo" | "gardener" | "verb" | "system";
 
@@ -47,7 +47,10 @@ export type Op =
   | { t: "card.add"; card: Card }
   | { t: "card.remove"; id: string }
   | { t: "ref.add"; ref: Reference }
-  | { t: "ref.remove"; id: string };
+  | { t: "ref.remove"; id: string }
+  /** Add or replace a memory item (aim, standing instruction). */
+  | { t: "memory.set"; item: MemoryItem }
+  | { t: "memory.remove"; id: string };
 
 export interface Transaction {
   id: string;
@@ -449,6 +452,24 @@ export class DocEngine {
         if (i < 0) return [];
         const [r] = d.references.splice(i, 1);
         return [{ t: "ref.add", ref: r }];
+      }
+      case "memory.set": {
+        const mem = (d.memory ??= []);
+        const i = mem.findIndex((m) => m.id === op.item.id);
+        if (i < 0) {
+          mem.push(clone(op.item));
+          return [{ t: "memory.remove", id: op.item.id }];
+        }
+        const prev = mem[i];
+        mem[i] = clone(op.item);
+        return [{ t: "memory.set", item: prev }];
+      }
+      case "memory.remove": {
+        const mem = d.memory ?? [];
+        const i = mem.findIndex((m) => m.id === op.id);
+        if (i < 0) return [];
+        const [m] = mem.splice(i, 1);
+        return [{ t: "memory.set", item: m }];
       }
     }
   }

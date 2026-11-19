@@ -10,6 +10,7 @@
  * The model never writes HTML or touches the page directly. It proposes; the
  * engine validates and applies.
  */
+import { aimOf, instructionsOf, ledgerMatches } from "./memory";
 import { z } from "zod";
 import type { Op } from "./engine";
 import { newId } from "./ids";
@@ -57,6 +58,8 @@ export interface SettleRequest {
   recent: string[];
   /** Reference titles the user can mention by name. */
   references: string[];
+  /** What Phlo remembers: the aim, standing instructions, and Ledger lines the wet words point at. */
+  memory?: { aim: string | null; instructions: string[]; recall: { id: string; under: string | null; text: string }[] };
 }
 
 export const SettlePlanSchema = z.object({
@@ -162,7 +165,19 @@ export function buildRequest(
     currentHeadingId: opts.currentHeadingId,
     recent: opts.recent,
     references: draft.references.map((r) => r.title),
+    memory: memoryFor(draft, wet.map((w) => w.text).join(" ")),
   };
+}
+
+function memoryFor(draft: Draft, said: string): SettleRequest["memory"] {
+  const seen = new Set<string>();
+  const recall = ledgerMatches(draft.blocks, said)
+    .filter((e) => !seen.has(e.blockId) && seen.add(e.blockId))
+    .slice(0, 6)
+    .map((e) => ({ id: e.blockId, under: headingOf(draft.blocks, e.blockId), text: draft.blocks.find((b) => b.id === e.blockId)?.text ?? "" }));
+  const aim = aimOf(draft);
+  const instructions = instructionsOf(draft);
+  return aim || instructions.length || recall.length ? { aim, instructions, recall } : undefined;
 }
 
 /**

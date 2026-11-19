@@ -120,6 +120,12 @@ body.sidebar-open .rail { display: none; }
 }
 .ref-card img { display: block; width: 100%; height: 64px; object-fit: cover; border-radius: 4px; margin-top: 8px; }
 .ref-card a { color: inherit; text-decoration: none; }
+.mem-list { display: flex; flex-direction: column; gap: 6px; }
+.mem-row { display: grid; grid-template-columns: 56px 1fr auto; gap: 8px; align-items: baseline; font: var(--text-control); }
+.mem-text { color: var(--ink); outline: none; overflow-wrap: anywhere; }
+.mem-text[contenteditable="true"]:focus { box-shadow: inset 0 -1px 0 var(--ink-muted); }
+.mem-forget { border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 0 4px; font: inherit; opacity: 0; }
+.mem-row:hover .mem-forget, .mem-forget:focus-visible { opacity: 1; }
 .sidebar .foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
 
 /* ================================================================ page */
