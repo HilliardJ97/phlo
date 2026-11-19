@@ -121,10 +121,43 @@ Each job gets the cheapest model that passes its goldens. Privacy improves too: 
 
 **When to revisit:** after a few hundred real sessions, *if* the eval shows routing is the weak or slow link. Open models make this realistic in a way it wasn't for Cursor: **fine-tune a small LoRA adapter on an open 4–8B model** with the accepted and undone settles from traces, on the Mac itself (MLX) or for a few dollars of rented GPU time. That's "our own model" at hobby-project cost: a router trained on exactly how you organize, running free and offline. Apple's on-device model also accepts adapters.
 
-## 8. What changed tonight
+## 8. Measured results (Nov 19, late)
+
+38 golden checks across 7 scripted sessions (`evals/goldens.ts`), run through the app's real settle path. Cloud models via OpenRouter, full mode (the model places and writes), low reasoning. Total spend for every run tonight: **$0.15**.
+
+| Route | Checks | p50 | p95 | Notes |
+|---|---|---|---|---|
+| **GPT-6 Luna** (on the ChatGPT plan) | **33/38 (87%)** | **0.77 s** | 1.8 s | Was 17/38 (50%) before tonight's prompt and engine fixes |
+| gpt-oss-120b (open weights) | 29/38 (76%) | 1.0 s | 1.5 s | Earlier prompt revision |
+| Gemini 3.5 Flash | 21/34 (62%) | — | 2.3 s | Earlier prompt and goldens; partly rate-limited |
+| Local rules only | 22/38 (58%) | <1 ms | <1 ms | Offline floor; explicit commands always take this route |
+| qwen3:1.7b on CPU (no GPU) | 15/34 (44%) | 13.7 s | 22.7 s | No better than local rules; a Mac GPU would be much faster, but quality is the blocker |
+| GPT-6.1 Sol | not measured | | | Free OpenRouter allowance ran out mid-run |
+
+**What moved Luna from 50% to 87%** (each found by reading failing plans with `PHLO_DEBUG=1`):
+- **Revisions guarded by the rev the model saw.** Found by the benchmark earlier.
+- **Scribe guard fixes.** It treated "auto-pick" as an invented word, and blocked corrections that kept the rest of the speaker's own sentence.
+- **Corrections target the line being corrected.** "Not forty, sixty" finds the line with forty, and spoken and written numbers compare equal (forty = 40, four thousand = 4,000).
+- **Prompt.** Signposts ("pain points.", "for solutions") start sections from the speaker's own words; enumerations become bullets; stated decisions become Decisions; Next is only for commitments; numerals are written as numerals.
+- **Reasoning models.** `temperature` isn't sent to them, which had been making OpenRouter reject every GPT-6 request.
+
+**Still failing (Luna):**
+- Scribe: "for solutions, one…, two…" doesn't always split into a new Solutions section.
+- "How people find us" gets put on Next.
+- A typed line under Risks isn't moved to Pricing.
+
+**Next lever:** split speech at signposts and enumerations deterministically before the model sees it, so these cases don't depend on model judgment.
+
+**Decision:** ChatGPT through Codex stays the default (your plan, cloud, measured fast and good). Open models stay a choice in Your AI. On your Mac, run `npm run eval -- --chatgpt` once you're signed in to Codex, to score the exact model Codex uses (it reported `gpt-6.2-sol` as its default).
+
+## 9. What changed tonight
 
 - ChatGPT through Codex is the default provider again, as in the prototype: locked down (read-only, no shell, no web, no user config), schema-constrained, ChatGPT sign-in only (API keys stripped from its environment).
 - Plan-limit errors switch to local settling for 30 minutes; calls in the last 5 hours are counted.
 - Any OpenAI-compatible model (open models via Ollama, LM Studio, OpenRouter…) with route mode: `PHLO_MODEL=qwen3:8b npm run eval -- --open`.
+- **Warm ChatGPT:** one `codex app-server` process (JSON-RPC, protocol verified against Codex 0.170) instead of a process per settle; per-call `codex exec` is the fallback.
+- **Voice restructuring:** rename, merge ("move X under Y"), move before/after, park, "make that a question/decision/table", applied as one guarded change with an Undo toast.
+- **Forms:** numbered, decision, idea, note, table; Turn into (right-click) and Add (`/`); list ↔ table keeps every word.
+- `evals/sweep.sh` compares models on the goldens (OpenRouter), `PHLO_DEBUG=1` prints failing plans.
 - The eval runs against ChatGPT: `npm run eval -- --chatgpt` (or `PHLO_MODEL=… PHLO_REASONING=minimal` to compare).
 - The Codex flags were checked against the current CLI (0.170): all parse. Real runs need your sign-in, so the ChatGPT path is untested here.

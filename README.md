@@ -11,7 +11,8 @@ npm install
 npm run desktop      # the Mac/Windows/Linux app (Electron)
 npm run web          # same app in Chrome at http://127.0.0.1:8765 (uses Chrome's speech service)
 npm test             # engine, settle and benchmark tests
-npm run eval         # live settle-quality eval (set ANTHROPIC_API_KEY to use Claude)
+npm run eval -- --chatgpt     # settle quality on your ChatGPT plan (Codex signed in)
+./evals/sweep.sh              # compare models on OpenRouter (PHLO_API_KEY=sk-or-…; cents per run)
 ```
 
 **AI, no API key:** Phlo settles with ChatGPT on your plan through the Codex CLI, like the prototype. Install Codex and sign in once: `npm i -g @openai/codex && codex login` (choose ChatGPT). Without it, Phlo settles with fast local rules. **Your AI** in the sidebar switches to Claude (API key) or on-this-Mac only.
@@ -27,7 +28,9 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 | Talk | Hold **Space** to talk, release to stop. **Tap Space twice** to lock it on (tap again to stop). Space talks when the caret isn't in text, on an empty draft, or with **⌥Space** anywhere. Or click the dot. |
 | Type | Just type. New lines stay wet (light gray) until you finish the paragraph (**Enter twice**) or move away. **⌘↵** settles now. |
 | Structure by hand | `# ` heading · `- ` bullet · `? ` open question · Tab / ⇧Tab for list depth |
-| Change your mind | Say "scratch that, …". The old version folds into an `EARLIER:` trail. Nothing is deleted. |
+| Change your mind | Say "scratch that, …" or "not forty, sixty". The old version folds into an `EARLIER:` trail. Nothing is deleted. |
+| Restructure by voice | "rename pricing to business model", "move risks under pricing", "put goals before hiring", "park other trends", "make that a decision", "make these a table". A toast names the change, with Undo. |
+| Forms | Type `/` on a new line to add one, or right-click any line to **Turn into**: text, heading, bullets, numbered, open question, decision, idea, note, table. Tab / Enter move through table cells. |
 | Direct it | "new section pricing: …", "under risks: …" are handled instantly, on-device. |
 | Tangents | "oh also, …" becomes a `TANGENT · LATER` tab in the margin. Click it to bring it into the section you're in. |
 | Action items | "talk to 5 couples" goes to the **Next** list at the end. |
