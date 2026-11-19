@@ -101,7 +101,7 @@ Status: ✅ built and tested · 🟡 partly built or not verified live · ⬜ to
 - Sources are immutable: quoted and cited, never paraphrased into the page. ⬜
 - **Connections to Phlo:** Google Calendar, Gmail and Google Drive at launch, through MCP, held by Phlo's host. Read-only unless Phlo asks. ⬜
 
-### Memory (a differentiator; deep dive in `ARCHITECTURE.md` §6b)
+### Memory (a differentiator; deep dive in `ARCHITECTURE.md` §8–9)
 - Settling at minute 60 is as fast as at minute 1, and callbacks to minute 3 land. ⬜
 - The draft's aim, standing instructions ("keep it to three pillars"), and a ledger of people and numbers. ⬜
 - **What Phlo remembers** is visible and editable in the sidebar. ⬜
