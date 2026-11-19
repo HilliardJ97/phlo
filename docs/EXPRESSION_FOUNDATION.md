@@ -279,3 +279,44 @@ The foundation set (★) chosen for the three jobs Phlo serves now:
 2. **Agents by default:** offered by Phlo in Partner (recommended), or only when you @-tag them?
 3. **First connector:** Calendar, Notion, or Google Drive?
 4. **Canvas:** a block inside the page (recommended: keeps one place to think), or a separate canvas view?
+
+---
+
+## Status (Nov 19)
+
+How it works today: **one menu, three ways in, and Talk can do all of it.** `/` on a new line or the **+** beside any line opens **Add**; right-click opens **Turn into**. The menu is grouped Text · Thinking · Visual · Media, filters as you type, and asks media's one question (search words, a description, a link) inside itself, with no dialogs. Every change is one guarded transaction with Undo.
+
+| Asked for | Status | Menu | Talk |
+|---|---|---|---|
+| Headings, **subheadings** (`02.1`) | ✅ | Heading, Subheading | "make that a subheading" |
+| **Toggles** | ✅ Any heading folds what's under it (arrow beside it) | Toggle | "fold pricing", "unfold risks" |
+| Bullets, numbered, open question, decision, idea, note | ✅ | Text, Thinking | "make that a decision", automatic for "we decided…" |
+| **Table** | ✅ Editable cells, names obvious columns | Table | "make these a table" |
+| **Flowchart** | ✅ Steps as a diagram | Flow | "make that a flowchart" |
+| **Bar / line chart, histogram** | ✅ From a table, from "Jan: 120" lines, or one spoken sentence. Never invents numbers; shows "No source yet" | Chart | "make a bar chart of signups: Jan 120, Feb 180…", "chart that" |
+| **Timeline** | ✅ Dated moments on a line | Timeline | "make that a timeline" |
+| **Columns** | ✅ 2–4 side by side | Columns | "make these columns" |
+| **Images from this Mac** | ✅ Paste, drop or upload into the page | Image | (paste or drop) |
+| **Images from the internet** | ✅ Openverse: openly licensed, credited under the image | Find a photo | "find a photo of a wedding album" |
+| **Generated images** | ✅ Built; needs an OpenRouter key with credit (Your AI) | Generate image | "add an image of…" |
+| **YouTube / Loom / Vimeo / Figma** | ✅ Embedded; pasting a video link into the page embeds it | Video or embed | (paste a link) |
+| Suggestions | ✅ "These read like a flow / table" in the margin (Partner) | — | — |
+| **Wireframes, clickable prototypes** | ⏳ In the prototype (`product-workspace.js`), not ported yet | | |
+| **Diagrams** beyond flows (tree, metric tree, 2×2, concept map) | ⏳ Next: one diagram renderer, several layouts | | |
+| **Test results** | ⏳ An "Experiment" form: variants × metric, lift and confidence, drawn as a chart with its source | | |
+| **Charts from connectors** | ⏳ After connectors: a chart keeps its query and source and offers "refresh" | | |
+| Slides from Publish | ⏳ Uses the §2.9 layouts | | |
+
+### What keeps it seamless
+
+1. **One meaning, many shapes.** Lists, tables, flows, timelines, columns and charts share "items with attributes", so Turn into never asks you to retype, and every shape can turn back.
+2. **Where your caret is, is where things go.** Paste or drop into the page and it lands there; paste anywhere else and it's filed in References.
+3. **Ask once, inside the menu.** Media needs one input, and it's typed where you already are.
+4. **Talk is exact for commands.** Asking for a chart, a photo, a fold or a form runs as a deterministic intent: instant, offline where possible, and never written onto the page as words.
+5. **Honesty in visuals.** A chart only exists with real numbers, says when it has no source, and web images always carry their credit.
+
+### Next build order
+1. Port **wireframes and clickable prototypes** from the prototype onto the block model (screens, fields, actions as data, the same validation).
+2. **Diagram renderer**: tree, metric tree, 2×2 and concept map as layouts of one node/edge shape.
+3. **Experiment / test results** form.
+4. **Connectors** (Calendar, web, Drive or Notion), then charts that keep their query and refresh.

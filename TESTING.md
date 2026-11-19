@@ -60,7 +60,19 @@ Switch to **Partner**, lock talking on, and think through something real of your
 | Right-click any line | **Turn into** |
 | Click into wet text while Phlo is thinking | That text never moves while your caret is in it |
 
-## 5. References and Publish (2 minutes)
+## 5. Expression (4 minutes)
+
+| Try | Expect |
+|---|---|
+| Hover a line, click **+** (or type `/`), type `sub`, Enter | A subheading (`02.1`); the arrow beside any heading folds it |
+| Say "make a bar chart of signups: Jan 120, Feb 180 and March 260" | A chart with those exact values and "No source yet" |
+| Say "find a photo of a wedding album" | An openly licensed photo with its credit under it |
+| Say "for the roadmap, Q1: beta. Q2: launch. Q3: teams", then "make that a timeline" | A timeline with Q1–Q3 |
+| Paste a YouTube link on an empty line | The video, embedded |
+| Right-click a table → Chart | A chart, if a column has numbers; otherwise Phlo says why |
+| Say "add an image of…" | A generated image (needs an OpenRouter key with credit in Your AI) |
+
+## 6. References and Publish (2 minutes)
 
 | Try | Expect |
 |---|---|

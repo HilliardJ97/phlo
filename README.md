@@ -32,7 +32,7 @@ Keys are encrypted with the system keychain in the desktop app and never reach t
 | Structure by hand | `# ` heading · `- ` bullet · `? ` open question · Tab / ⇧Tab for list depth |
 | Change your mind | Say "scratch that, …" or "not forty, sixty". The old version folds into an `EARLIER:` trail. Nothing is deleted. |
 | Restructure by voice | "rename pricing to business model", "move risks under pricing", "put goals before hiring", "park other trends", "make that a decision", "make these a table". A toast names the change, with Undo. |
-| Forms | Type `/` on a new line to add one, or right-click any line to **Turn into**: text, heading, bullets, numbered, open question, decision, idea, note, table, flow. Tab / Enter move through table cells and flow steps. Say "make that a flowchart" or "make these a table". |
+| Forms | `/` on a new line or the **+** beside any line opens **Add**; right-click opens **Turn into**. Text (heading, subheading, toggle, bullets, numbered) · Thinking (open question, decision, idea, note) · Visual (table, chart, flow, timeline, columns) · Media (image, find a photo, generate image, video). Talk does the same: "make that a timeline", "chart that", "find a photo of…", "fold pricing". |
 | Direct it | "new section pricing: …", "under risks: …" are handled instantly, on-device. |
 | Tangents | "oh also, …" becomes a `TANGENT · LATER` tab in the margin. Click it to bring it into the section you're in. |
 | Action items | "talk to 5 couples" goes to the **Next** list at the end. |
