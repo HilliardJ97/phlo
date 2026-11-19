@@ -1,6 +1,6 @@
 // Builds the proposed Phlo marks: 20 content icons drawn only from the symbol
 // family's four parts (round, square, tail, gap). Ink on paper, 24-unit grid.
-// Run: node docs/design/proposals/marks/build.mjs
+// Run: node docs/design/phlo-handoff/brand/marks/build.mjs
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,7 @@ export const MARKS = [
   ["key", "Key point", "The thought at the center of the page", frame(4, 4, 16, 16) + dot(12, 12, 4)],
   ["risk", "Risk", "A square on its corner", `<g transform="rotate(45 12 12)">${frame(6, 6, 12, 12)}</g>` + dot(12, 12, 2)],
   ["quote", "Said", "The split bubble: someone's words", path("M8 4 A6 6 0 0 0 8 16 Z") + box(10, 4, 8, 12) + path("M18 16 L18 21 L13 16 Z")],
-  ["next", "Next", "A tail: moving on", box(4, 10, 8, 4) + path("M13 6 L20 12 L13 18 Z")],
+  ["action", "Action", "A tail: moving on", box(4, 10, 8, 4) + path("M13 6 L20 12 L13 18 Z")],
   // Content marks: what a section is about
   ["goal", "Goal", "Round within round", ring(12, 12, 8) + dot(12, 12, 3.5)],
   ["metric", "Metric", "Squares rising", box(4, 13, 4, 7) + box(10, 9, 4, 11) + box(16, 4, 4, 16)],

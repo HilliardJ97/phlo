@@ -1,6 +1,6 @@
 # Phlo: the expression system
 
-November 19, 2026. A design proposal for how Phlo expresses ideas: few words to learn, many shapes underneath, all in one aesthetic. `EXPRESSION_FOUNDATION.md` is the full catalog of forms; this page decides how it's organized and how it feels. Scope and priority live in `PRODUCT.md`.
+November 19, 2026. **The reasoning behind the expression decisions.** What was agreed is specified in `design/phlo-handoff/EXPRESSION_SPEC.md`, which wins wherever the two differ (for example: Board replaced Map view, Marks are Question, Idea, Decision, Action and Key point, and helpers are verbs). This page was the proposal for how Phlo expresses ideas: few words to learn, many shapes underneath, all in one aesthetic. `EXPRESSION_FOUNDATION.md` is the full catalog of forms; this page decides how it's organized and how it feels. Scope and priority live in `PRODUCT.md`.
 
 ---
 
@@ -40,9 +40,9 @@ Today's callouts are deliberately monochrome: a rule line for a Question, a soli
 2. **Shape works everywhere:** Sumi, print, Published, color blindness, a 16 px margin.
 3. **It's more distinctive.** Everyone does colored callouts. A page where meaning is carried by a small set of precise marks looks like Phlo and nothing else.
 
-**The marks:** twenty icons drawn only from the symbol family's four parts (round, square, tail, gap), ink only. See `docs/design/proposals/marks/` (`preview.html`, `marks.png`).
+**The marks:** twenty icons drawn only from the symbol family's four parts (round, square, tail, gap), ink only. See `docs/design/phlo-handoff/brand/marks/` (`preview.html`, `marks.png`).
 
-![Marks](design/proposals/marks/marks.png)
+![Marks](design/phlo-handoff/brand/marks/marks.png)
 
 - **Where they appear:** at the head of a Mark (Question, Idea, Decision, Note, Risk, Key point), on pillar heads, on Flow and Map nodes when it helps, and on margin cards. Nowhere else. They label a category; they're never decoration.
 - **Who picks:** Phlo, from meaning ("the users" gets Person, "cost" gets Metric). You can change one by voice or click.

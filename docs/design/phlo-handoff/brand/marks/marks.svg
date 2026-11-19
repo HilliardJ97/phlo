@@ -6,7 +6,7 @@
   <symbol id="mark-key" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="currentColor"/></symbol>
   <symbol id="mark-risk" viewBox="0 0 24 24"><g transform="rotate(45 12 12)"><rect x="7" y="7" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2"/></g><circle cx="12" cy="12" r="2" fill="currentColor"/></symbol>
   <symbol id="mark-quote" viewBox="0 0 24 24"><path d="M8 4 A6 6 0 0 0 8 16 Z" fill="currentColor"/><rect x="10" y="4" width="8" height="12" fill="currentColor"/><path d="M18 16 L18 21 L13 16 Z" fill="currentColor"/></symbol>
-  <symbol id="mark-next" viewBox="0 0 24 24"><rect x="4" y="10" width="8" height="4" fill="currentColor"/><path d="M13 6 L20 12 L13 18 Z" fill="currentColor"/></symbol>
+  <symbol id="mark-action" viewBox="0 0 24 24"><rect x="4" y="10" width="8" height="4" fill="currentColor"/><path d="M13 6 L20 12 L13 18 Z" fill="currentColor"/></symbol>
   <symbol id="mark-goal" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.5" fill="currentColor"/></symbol>
   <symbol id="mark-metric" viewBox="0 0 24 24"><rect x="4" y="13" width="4" height="7" fill="currentColor"/><rect x="10" y="9" width="4" height="11" fill="currentColor"/><rect x="16" y="4" width="4" height="16" fill="currentColor"/></symbol>
   <symbol id="mark-person" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 21 A8 7 0 0 1 20 21 Z" fill="currentColor"/></symbol>

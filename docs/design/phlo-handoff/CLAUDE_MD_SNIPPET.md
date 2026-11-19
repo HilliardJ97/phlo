@@ -10,7 +10,8 @@
 - **Flat:** no shadows on cards, no gradients, no glass. Hairline borders only.
 - **Motion:** unsettled text is `--ink-wet`. Settling is a color change over `--dur-settle-color`, then movement over `--dur-settle-move` with `--ease-settle`. No bounce or spring. Respect `prefers-reduced-motion`.
 - **Never move text under the caret.**
-- **Vocabulary:** Draft, Published, Publish, Partner, Scribe, Room view, References, Tab. Never "document," "deliverable," "workspace," "clean," "assistant."
+- **Vocabulary:** Draft, Published, Publish, Partner, Scribe, Room view, References, Tab, Page, Board, Look into, Push back, Make, Follow up, Play. Never "document," "deliverable," "workspace," "clean," "assistant," "agent."
+- **Phlo speaks only in the margin**, only at pauses, one card per section, three on screen. Meaning is carried by ink marks (`brand/marks/`), not colors; idea colors mark themes only.
 - **Copy:** short, warm, verbs over nouns. One-word UI where possible.
 - **Scribe mode:** organizing only. Never add content the user didn't say.
 - **Logo:** the split-bubble SVGs in `brand/`. Never redraw, recolor or round the square.

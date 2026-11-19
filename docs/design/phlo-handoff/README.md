@@ -8,10 +8,11 @@ Everything Claude Code needs to bring the Phlo app in line with the new design d
 |---|---|---|
 | `DESIGN_DIRECTION.md` | The full context: product, users, architecture, brand, decisions log | First, always |
 | `CORE_SCREEN_SPEC.md` | The build target: today vs. target, behavior per screen, acceptance checks, build order | Before writing code |
+| `EXPRESSION_SPEC.md` | Page and Board, the margin, verbs, shapes, marks, theme colors, Connect, right-click, Play (agreed Nov 19) | Before building anything beyond the core screens |
 | `BRAND_BOOK.md` | The design system's brand book (color, type, motion, marks, vocabulary) | For any visual detail |
 | `tokens/tokens.json` | Source tokens: colors in both themes, type, spacing, radius | To map into the app's styling |
 | `tokens/tokens.css` | Ready-to-use CSS variables, `[data-theme="sumi"]` for dark, `.type-*` classes, motion variables | Drop into the app |
-| `brand/` | The symbol, lockup, wordmark (light and dark), app icon, symbol family SVGs, and an overview PNG | Replacing the logo and icons |
+| `brand/` | The symbol, lockup, wordmark (light and dark), app icon, symbol family SVGs, an overview PNG, and the 20 content marks in `brand/marks/` | Replacing the logo and icons |
 | `screens/*.dc.html` | Reference markup for the 4 designed screens (Start, Talking, Room view, Sidebar open). Read them for exact spacing, sizes and copy. They're design files, not app code | Building each screen |
 | `CLAUDE_MD_SNIPPET.md` | Design rules to paste into the repo's CLAUDE.md so they stick | Once, at the start |
 

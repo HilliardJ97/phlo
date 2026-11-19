@@ -23,8 +23,8 @@ Two themes: **Paper** (light) and **Sumi** (dark). Sumi is the hero for demos an
 
 - **Neutrals do 95% of the work.** `paper`, `paper-raised`, `hairline`, `ink` and `ink-muted` make up the whole writing surface.
 - **`vermilion` is the voice.** Only one vermilion thing is on screen at a time: the live mic dot. If vermilion appears anywhere else, the voice loses its meaning.
-- **`cobalt`, `teal` and `saffron` are idea colors.** When Phlo detects themes, each theme gets one of these as a small round mark beside its heading and in any chart built from it. Maximum three on a page.
-- **`tab` means Phlo touched this.** Callouts, pulled-out key ideas and agent results get a sticky-tab flag in `tab`.
+- **`cobalt`, `teal` and `saffron` are idea colors.** Each theme in a draft gets one: a small round mark beside its heading, a 2px underline on text you tag with it, its cluster on the Board, and its series in a chart. Maximum three per draft. There are no other text colors.
+- **`tab` means Phlo touched this.** Margin cards, pulled-out key ideas, things Phlo found or made, and pins get a `tab` edge.
 - **`ink-wet` is speech in motion.** Live words appear in `ink-wet` and settle into `ink`. It's the only token allowed below 4.5:1, because it never stays on screen.
 
 | Do | Don't |
@@ -41,6 +41,7 @@ Two themes: **Paper** (light) and **Sumi** (dark). Sumi is the hero for demos an
 - **Mono labels make it modern.** `label` is uppercase 11px with +0.08em letter-spacing, like the "01" running header on a book page. Use them for metadata, section numbers and states.
 - **Body is calm.** `body` is 16/26 and nothing else competes with it.
 - The playful lettering lives in **marks** (wordmark, doc covers), never in body text.
+- **Emphasis in body:** italic, underline, bold at 600. Titles and headings are never bold.
 
 ## Space
 
@@ -91,6 +92,8 @@ New symbols use only these four parts. If an idea needs a fifth shape, it doesn'
 
 - **Sticky tab:** a flat `tab` flag with `radius-sm` corners that sticks out past the column edge. It marks callouts, tangents and agent results.
 - **Idea marks:** small solid discs in `cobalt`, `teal` and `saffron` that label themes.
+- **Content marks:** 20 ink icons in `brand/marks/`, built only from the four parts. They head Question, Idea, Decision, Action and Key point blocks, pillars, Board clusters and margin cards. Ink only, never decoration. Typing `:` offers them before emoji.
+- **Connect:** a 1px `ink-muted` curve in the left gutter joining two blocks, with an optional mono label at its midpoint. Lines never cross text.
 
 Earlier wordmark explorations (Wave, Dot, Seal, Pop) are kept in the Explorations asset group for reference only.
 
@@ -128,6 +131,9 @@ Phlo has two places, and the brand rule follows them: **you think in Drafts, and
 | Room view | Large, chrome-free display for an audience |
 | References | Links, images and screenshots you think against |
 | Tab | Anything Phlo pinned to the margin |
+| Page / Board | The two views of a draft: in order, or spread out as cards |
+| Look into, Push back, Make, Follow up | The four things Phlo can go and do for you |
+| Play | Watch a Published piece build itself to your voice |
 | Settle | What happens when wet text (spoken or typed) becomes organized ink. A behavior, not a button |
 | Publish | Turn a draft into a doc, deck, one-pager or prototype |
 | Published | The shelf of finished pieces |
@@ -140,4 +146,4 @@ Short, warm, plainspoken. Verbs over nouns. One-word UI copy where possible: **S
 
 ## Not this
 
-Warm cream and terracotta (that's another AI's look). A Present button, a button named Clean, or a four-control talk bar. Heavy, tightly tracked editorial titles. Vintage or retro textures. Sci-fi chrome, glow or glass. Blue-purple gradients. Emoji.
+Warm cream and terracotta (that's another AI's look). A Present button, a button named Clean, or a four-control talk bar. Heavy, tightly tracked editorial titles. Vintage or retro textures. Sci-fi chrome, glow or glass. Blue-purple gradients. Emoji as decoration (inline emoji you type are fine). Colored callouts. Free text colors.

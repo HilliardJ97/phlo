@@ -1,174 +1,171 @@
-# Phlo: product requirements for the MVP
+# Phlo: product requirements
 
-November 19, 2026. What we ship first, what "done" means, and what we deliberately leave out. Design lives in `design/phlo-handoff/`; how it's built lives in `ARCHITECTURE.md`; the full catalog of forms lives in `EXPRESSION_FOUNDATION.md`. This page decides scope.
+November 19, 2026. The agreed MVP. Design lives in `design/phlo-handoff/` (the source of truth for how it looks: `EXPRESSION_SPEC.md` for everything beyond the core screens). How it's built lives in `ARCHITECTURE.md`. `EXPRESSION_SYSTEM.md` keeps the reasoning behind the expression decisions.
 
 ---
 
-## 1. The bet
+## 1. Mission
 
-**You think out loud, and a clear page builds itself while you keep going.** You never manage the tool.
+- **Phlo is where thinking out loud becomes something clear.** You talk; Phlo shapes; you never manage the tool.
+- **The promise:** never manage the tool, never lose a word, never get words put in your mouth.
+- **Why it wins:** other tools give you a transcript, a chat or a blank canvas. Phlo is the only page that listens and arranges at the same time.
+- **Taste:** do a lot, show a little. Many shapes underneath, a handful of words on the surface. Every feature is judged by one question: does it keep you in flow?
 
-Every other tool makes you pick one of two:
-- **Talk, and get a transcript or chat.** ChatGPT voice, Otter, Granola. The output is a conversation or a summary written afterwards.
-- **Organize, and stop thinking.** Notion, Docs, Miro. You're the one filing, formatting and drawing.
+## 2. Who it's for
 
-Phlo is the first page that **listens and arranges at the same time.** Your words land under the right heading, lists become lists, a sequence becomes a flowchart, "not sixty, forty" fixes the exact number, and nothing you said is lost.
+- **Launch: the framer.** PM candidates in product sense and case interviews, in Scribe and Room view. A sharp pain, a tight community, and every session is a demo.
+- **Next: the explorer.** Founders and PMs thinking alone in Partner (the morning chief-of-staff session is the reference).
+- **Not yet:** teams, students, meeting notes.
 
-**Why now:** models are finally fast and cheap enough to place each thought in about a second. And as AI writes more of the finished output, the valuable part of work moves to the messy thinking before it. No tool is built for that part.
+## 3. The model: six things to learn
 
-## 2. Who it's for first
+1. **Draft:** where you think, across many sessions.
+2. **Page and Board:** two views of the same draft. Page for narrowing down, Board for spreading out.
+3. **Phlo:** shapes as you go (Settle), as Partner or Scribe.
+4. **The margin:** the only place Phlo speaks.
+5. **References:** everything from outside.
+6. **Publish:** a finished piece you can send or play.
 
-| | The framer (Scribe) | The explorer (Partner) |
-|---|---|---|
-| Moment | Talking through a problem while someone watches: a product sense interview, a client call, a working session | Working a messy idea alone, across many sessions |
-| Must feel | "The page keeps up, and it's only my words." | "I got it all out, I didn't lose the tangents, and I know what to do next." |
-| Launch audience | **PM candidates prepping product sense and case interviews.** Phlo's origin, a sharp pain, a tight community, and every session is a demo. | Founders and PMs thinking through a plan |
+Three ways in, always equal: **say it, right-click it, or type `/`.**
 
-We launch to the framer first. A narrow, loud audience beats a broad, quiet one.
+## 4. One session
 
-## 3. What has to feel wild
+1. **Start:** a blank page and a dot. Hold Space and talk, or just type.
+2. **Spread out (optional):** flip to the Board, scatter, cluster, connect; flip back and clusters become sections.
+3. **Settle:** words land in the right place; the whole draft stays in shape at pauses; you correct by talking.
+4. **Shape:** say a shape or right-click; Phlo picks the variant.
+5. **Pull in:** Look into, Push back, Make, Follow up. Results arrive in the margin.
+6. **Finish:** Publish. Send the link or let them Play it.
 
-Distribution comes from moments people screen-record and send to a friend. The MVP has to deliver four of them, every time:
+## 5. Requirements
 
-1. **The page builds itself.** Three minutes of talking, no mouse: sections from your own words, lists, a decision, a Next list. *The 30-second demo.*
-2. **You change your mind out loud, and the page fixes the exact spot.** "Scratch that, not forty, sixty." The old version folds into a faint trail. *The trust moment.*
-3. **Say a shape, get a shape.** "Make that a flowchart." "Chart signups: Jan 120, Feb 180, March 260." "Find a photo of a wedding album." *The expression moment.*
-4. **Stuck? Ask out loud, keep thinking.** "Look into how Shutterfly prices photo books." "Any ideas here?" Phlo works in the background and brings back sources and ideas in the margin, without interrupting you. *The flow moment. New in this plan, §5.*
+Status: ✅ built and tested · 🟡 partly built or not verified live · ⬜ to build.
 
-If a feature doesn't make one of these sharper, it isn't in the MVP.
+### Talk
+- Hold Space to talk; tap twice to lock; ⌥Space anywhere. The voice dot is the only vermilion. ✅
+- Words appear wet within ~150 ms of being heard. ✅ (browser)
+- **Desktop speech on-device and free: Apple speech (SpeechAnalyzer), benchmarked against Parakeet and whisper on our recordings.** ⬜ launch blocker
+- **Finished-thought detection:** settle on a finished thought, not just silence (on-device turn model, ~8 MB), plus a 600 ms grace window so "scratch that" folds in before anything is sent. ⬜
+- Every utterance is time-coded and linked to the lines it became. 🟡
 
-## 4. Product laws
+### Settle
+- p50 ≤ 1.5 s, p95 ≤ 3 s on ChatGPT; commands on-device in < 5 ms. 🟡
+- Text never moves under the caret; a stale edit never overwrites typing. ✅ **Non-conflicting parts of a plan still apply.** ⬜
+- Sections from your cue words, lists from "one, two…", tangents to the margin, Actions to Next. ✅
+- **The whole draft stays in shape:** at pauses, Phlo merges duplicate sections, reorders into the story, promotes recurring ideas, splits long sections, turns comparable lists into tables. One chip with Undo. Never touches the section you're in. ⬜
+- **Settle off:** just type; Phlo only offers in the margin. Scribe is always on. ⬜
+- Typing settles like speech (Enter twice, caret leaves, ⌘↵). ✅
 
-These decide arguments. Most are already enforced in code.
+### Change your mind and move things
+- "Scratch that", "not forty, sixty", corrections inside tables and flows; the old version in a trail; nothing deleted. ✅
+- Rename, move, merge, park by voice, with Undo. ✅
+- Drag grip; ⌥⇧↑↓; dragging a heading carries its section. ⬜
 
-1. **Never manage the tool while thinking.** No naming, filing, buttons to organize, or modes to pick mid-thought.
-2. **Never lose a word.** Corrections fold into trails; removed things are parked.
-3. **Never put words in your mouth when someone's watching.** Scribe adds nothing, enforced in code.
-4. **Never move text under the caret.**
-5. **Inputs in the margin, output on the page.** Sources, research, ideas, tangents and suggestions live beside the page until you pull them in. Only your thinking writes the page.
-6. **Small and reversible: just do it. Structural: show it, with Undo. Ambiguous: ask once.**
-7. **Free to use.** Your ChatGPT plan or on-device rules. Paid models are optional, capped, and never the default.
+### Shape (seven families)
+- **Text:** heading, subheading (folds), text, bullets, numbered, checklist, quote, code; italic, bold, underline, strike, link. 🟡
+- **Marks:** Question, Idea, Decision, Action (owner and date), Key point (becomes the Published summary). 🟡 (question, idea, decision exist)
+- **Compare:** table, cards, pillars, pros and cons, ranking. 🟡 (table, columns)
+- **Flow:** steps, linear, branching, cycle, timeline. 🟡 (linear, timeline)
+- **Numbers:** big number, **live estimate**, bar, line, pie. 🟡 (bar, line, histogram)
+- **Make:** wireframe and prototype; talk while looking and notes become pins; "update it" runs the next pass. ⬜
+- **Media:** photo, find a photo, video, Figma, PDF. ✅ (PDF ⬜)
+- Phlo picks the variant; you can say another. Switching keeps every word and number. No numbers, no chart. Phlo converts only when asked; otherwise it suggests. ✅ for built forms
+- **20 ink marks** on Marks, pillars, clusters and cards; `:` offers marks then emoji. ⬜ (drawn)
+- **Theme colors:** coloring text tags it with one of three themes. ⬜
 
-## 5. The new P0: Look into and Ideas
+### Board
+- Page ⇄ Board by voice, ⌘B or pinch. Same blocks, nothing copied. ⬜
+- Talk and the card lands at the pointer; click anywhere to type; drag, cluster, Connect. ⬜
+- Phlo clusters by theme; fold back turns clusters into sections in reading order. ⬜
+- Phlo can offer the Board; it never flips on its own. ⬜
 
-The flow-breaker today is the moment you hit something you don't know. You leave, open a browser, lose the thread. Phlo should keep you in flow.
+### Connect
+- Say it, drag between grips, or right-click. A gutter curve with an optional note; chips at both ends when far apart. Shown on the Board too. ⬜
 
-**How it works**
-- Say **"look into …"**, **"find out …"**, or **"what's the data on …"**. A quiet `LOOKING INTO · Shutterfly pricing` tab appears in the margin beside the line you were on, and you keep talking.
-- Say **"any ideas?"** or **"give me ideas on this"**. Phlo reads the section you're in and returns three short ideas in the margin, marked as Phlo's (tab color).
-- Results arrive as **References**: each with a one-line finding, its source link, and a date. Click one to read it in the sidebar; that's the "side browser," with no tabs to manage.
-- **Pull it in** by voice ("use the second one", "add that") or by clicking. It lands in your section with its source attached. Until then, nothing on the page changes.
+### The margin
+- One card for Ask, Suggest, Looking into, Found, Tangent. 🟡 (tangent and ask exist)
+- Only at pauses; unprompted at most one per ~3 min; one per section; three on screen; `+N` for more. ⬜
+- Answer by voice or click, or ignore. Earlier from Phlo keeps everything that faded. Nothing on the room's screen in Scribe. ⬜
 
-**Rules**
-- Partner only shows results while you're in flow. In Scribe, results wait privately in the sidebar and never appear on the room's screen.
-- Every claim carries its source, or it's marked unverified.
-- One errand at a time per section, three at once at most. Each one shows when it's done; nothing beeps.
-- Runs on your ChatGPT plan through Codex's web search. Free.
-- Page text Phlo reads is data, never instructions.
+### Verbs
+- **Look into:** web and References research with sources. ⬜
+- **Push back:** pressure-tests a section as Ask cards. ⬜
+- **Make:** see Shape. ⬜
+- **Follow up:** uses connections to draft invites, emails and tasks; always asks before sending. ⬜
+- Each runs on your connected model; "with Claude" picks another for one job. 🟡 (provider chain exists)
+- Results are proposals; nothing writes to the page until you pull it in. Phlo adds what it finds or makes to References. ⬜
 
-**What we're not doing**
-- **No embedded web browser.** A real browser inside Phlo means tabs, logins and a security surface, and it pulls you out of flow. A reader view of a reference in the sidebar does the job.
-- **No autonomous agents running unasked.** Partner may *offer* ("Check this number?") but never starts work on its own.
+### References and connections
+- ⌘V links and screenshots into References. ✅
+- Reader view in the sidebar; refer to a source by voice. ⬜
+- Sources are immutable: quoted and cited, never paraphrased into the page. ⬜
+- **Connections to Phlo:** Google Calendar, Gmail and Google Drive at launch, through MCP, held by Phlo's host. Read-only unless Phlo asks. ⬜
 
-## 6. Expression, refined
+### Memory (a differentiator; deep dive in `ARCHITECTURE.md` §6b)
+- Settling at minute 60 is as fast as at minute 1, and callbacks to minute 3 land. ⬜
+- The draft's aim, standing instructions ("keep it to three pillars"), and a ledger of people and numbers. ⬜
+- **What Phlo remembers** is visible and editable in the sidebar. ⬜
+- Contradictions surface as one Ask card in Partner. ⬜
 
-The full design is in `EXPRESSION_SYSTEM.md`. The decisions:
+### Publish and Play
+- Publish turns solid at 3 sections with content; Key points become the summary. 🟡
+- Export to one HTML file and PDF; hosted link right after. ⬜
+- **Play:** the page builds itself again to your voice, with captions, at 1× or 2×. Voice kept on your computer only, and you can turn it off. ⬜
 
-| Idea | Decision |
-|---|---|
-| Every shape you could need | **Eight families, one word each:** Text, Marks, Compare, Flow, Numbers, Map, Make, Media. Over 40 variants underneath; Phlo picks one (pie or line, cycle or timeline) and you can say a different one. Maximal depth, minimal surface. |
-| New: estimates | **Spoken math becomes a live calculation** (`10M × 5% × $40 = $20M`). Change one input, the total updates. Built for sizing questions. P0 for the framer launch. |
-| New: your voice, kept | **Hear any line as you said it.** Local only. The strongest proof of the Scribe promise. |
-| New: pins | **Point at anything visual** (screenshot, chart, wireframe, Figma) and your words become a numbered note on that spot. |
-| Post-its | **Cut.** Marks (Question, Idea, Decision, Note, Risk, Key point) and margin cards already do that job. A post-it would be a third way to say the same thing. |
-| Green questions, yellow ideas | **Shape, not color.** Twenty ink marks built from the brand's four parts. Color stays earned for themes. |
-| Highlight what's important | **Key point:** "that's really important" marks the line, and key points become the Published summary. |
-| Arrows | **Connect**, plus **Map view** (the Obsidian-like view of how ideas link). |
-| Phlo chiming in | **One margin card** for asks, suggestions, research and tangents, with strict rules for stacking, answering by voice, and fading. |
-| Moving things | **Drag, keys, or voice.** Never copy and paste. |
-| Prototypes you comment on | **Make:** talk while looking, notes become pins on exact elements, "update it" runs the next pass. |
-| Generated images | **Mostly replaced by marks.** Making images moves to Make and Publish covers, later. |
-| A whiteboard | Not in the MVP. A canvas is a second product. |
+### Trust and cost
+- Scribe adds nothing (enforced in code); never delete user words; local-first; keys in the host. ✅
+- Free by default: ChatGPT through Codex, then on-device rules. Paid models opt-in and capped. ✅ (cap ⬜)
 
-## 7. MVP scope
+### First run
+- From opening the app to a settled section in under 60 s; one-step ChatGPT sign-in; a 20-second "say this" example. ⬜
 
-**Status:** ✅ built and tested · 🟡 built, not verified live · ⬜ to build
+## 6. Release order (all of it is the MVP)
 
-### P0: launch blockers
+1. **Alpha (the core loop):**
+   - Apple speech and finished-thought detection.
+   - Settle with whole-draft shaping and the zero-fixes metric.
+   - The margin, Look into, memory.
+   - Text, Marks, Compare, Flow, Numbers with the live estimate.
+   - Drag to move, right-click parity, marks and themes.
+2. **Beta (the open world):**
+   - Board, Connect, Make with pins.
+   - Push back and Follow up.
+   - Calendar, Gmail and Drive.
+   - Reader view.
+3. **Launch (the growth loop):**
+   - Publish export and hosted links.
+   - Play.
+   - "With Claude" for any verb.
 
-| Area | Done means | Status |
-|---|---|---|
-| Talk → settle | Hold Space or double-tap to lock; wet words settle to ink within ~2 s on ChatGPT | ✅ engine · 🟡 real mic, real ChatGPT |
-| Speech in the desktop app, free | On-device speech, no key (Apple speech or whisper.cpp). Today the desktop app needs an OpenAI key; Chrome is free. | ⬜ **blocker** |
-| Change your mind | Scratch that, not X Y, corrections inside tables and flows, trails | ✅ |
-| Restructure by voice | Rename, move, merge, park, "make that a …", fold, with a toast and Undo | ✅ |
-| Forms | Headings, subheadings and toggles, lists, question, decision, idea, note, table, flow, timeline, columns, chart, image, find a photo, video | ✅ (generate image needs a paid key: P1) |
-| Partner and Scribe | Partner: tabs, one question when you stall, suggestions. Scribe: your words only, Room view | ✅ · 🟡 PHLO ASKS needs a live run |
-| **Look into and Ideas** | §5 | ⬜ **new** |
-| Margin cards | One component for Ask, Suggest, Found, Later, Working, with stacking and fade rules | 🟡 tangents and asks exist · ⬜ unified system |
-| Marks and Key point | Twenty ink marks on Marks, pillars and cards; "that's important" | ⬜ marks drawn (proposal) |
-| Chart and Flow variants | Pie, area, scatter, stacked; cycle, branch, steps, funnel, pillars; Phlo picks the variant | 🟡 bar, line, histogram, flow, timeline, columns · ⬜ the rest |
-| Move blocks | Drag grip, ⌥⇧↑↓, voice | 🟡 voice · ⬜ drag and keys |
-| Long sessions | 60 minutes of talking settles as fast as minute one, and callbacks to minute 3 land | ⬜ memory tiers (`ARCHITECTURE.md` §6b) |
-| References | Paste links and screenshots; read them in the sidebar; refer by voice | ✅ paste · ⬜ reader view |
-| Publish | A read view, plus **export to a single HTML file and PDF** you can send | ✅ view · ⬜ export |
-| Drafts persist | Local-first, atomic saves, journal, selective undo | ✅ |
-| Onboarding | First run: sign in to ChatGPT in one step, try a 20-second scripted example | ⬜ |
-| Free by default | ChatGPT through Codex, local rules fallback, no paid calls unless you add a capped key | ✅ |
+## 7. Not in the MVP
 
-### P1: right after launch
-
-- **Hosted Publish link** with a quiet "Made with Phlo" mark. The growth loop: every shared page is an ad.
-- **Connect and Map view.**
-- **Make:** wireframes you annotate by voice, then clickable prototypes (ported from `prototype/local-workspace`).
-- **Diagrams:** tree, 2×2, mind map.
-- **Reader view** for PDF, Markdown and HTML References.
-- **Interview mode:** a timer and a product sense frame for the framer audience.
-
-### Not now, and why
-
-| Idea | Why not yet |
-|---|---|
-| Embedded browser | Pulls you out of flow; big security surface. The sidebar reader covers it. |
-| Freeform canvas or whiteboard | A second product. Forms cover the common shapes. |
-| Multiplayer editing | The framer shares a screen; the explorer is alone. Needs a sync engine; revisit with demand. |
-| Connectors (Drive, Notion, analytics) | Valuable, but each one is integration work. Look into covers "I need information" for launch. |
-| Agent roster (`@critic`, `@analyst`…) | Look into and Ideas are the two that earn it first. Add agents from real requests. |
-| Publish to slides | After hosted links. |
-| Mobile | Thinking out loud happens at a desk first. |
-| Training our own model | No data yet; plans are tiny structured outputs. See `ARCHITECTURE.md` §9. |
+- Map view (Board replaces it).
+- Kanban, post-its on the Page, free text colors, styling controls.
+- Image creation (marks instead; ink concept sketches later in Make).
+- Multiplayer, mobile, Publish to slides (though Numbers and Compare borrow the best slide patterns).
+- Outside agents working in a draft over MCP (later, as guests that only propose).
 
 ## 8. Quality bars to ship
 
-| Bar | Target | How we measure |
-|---|---|---|
-| Settle speed | p50 ≤ 1.5 s, p95 ≤ 3 s from end of speech to ink, on ChatGPT | Your AI panel, eval traces |
-| Placement quality | ≥ 90% of golden checks on ChatGPT; ≥ 80% on local rules | `npm run eval` |
-| Lost words | 0 | Engine invariant and tests |
-| Scribe violations | 0 | `enforceScribe` and goldens |
-| Text moved under caret | 0 | e2e acceptance |
-| Time to first wow | < 60 s from first open to a settled section | Onboarding test with 5 people |
-| Crash-free sessions | ≥ 99% | Local crash log |
+- Settling: p50 ≤ 1.5 s and p95 ≤ 3 s on ChatGPT.
+- **Fixes per session:** median 0, and fewer than 2 at the 90th percentile.
+- 0 lost words, 0 Scribe violations, 0 text moved under the caret.
+- Edits landing on the wrong block: < 1%. Sources kept exactly: 100%.
+- Phlo interrupting mid-thought: < 5%.
+- Test sessions: ≥ 90% of checks on ChatGPT, ≥ 80% on-device, 3 runs out of 3, including a 45-minute session.
+- Time to first wow under 60 s, with 5 new people.
 
 ## 9. What we measure after launch
 
-- **Activation:** % of new users with a draft of 3+ sections in their first session.
-- **The wow:** % of sessions with a voice correction or "make that a…" (people trusting the page).
-- **Flow:** minutes talking per session; % of Look into results pulled into the page.
-- **Retention:** % returning in week 2 to the same draft (explorers) or a new one (framers).
-- **Growth:** published pages shared, and sign-ups from them (once hosted links ship).
+- **Activation:** a 3-section draft in the first session.
+- **Trust:** sessions with a voice correction or a shape change.
+- **Flow:** minutes talking per session; Found cards pulled in.
+- **Retention:** week-2 return.
+- **Growth:** Published pieces played and shared.
 
-## 10. Go-live plan
+## 10. Go-live
 
-1. **Private alpha, 10 people** (PM candidates and two founders): the 20-minute test in `TESTING.md`, a 15-minute call after.
-2. **Fix the top 3 janky moments.** Re-run the evals.
-3. **Record the demo:** one take, no cuts, a product sense answer building itself, with a correction and "look into."
-4. **Launch where the framers are:** PM interview communities and newsletters, plus a short video post. Waitlist to a signed download.
-
-## 11. Decisions for Justin
-
-1. **Launch audience:** PM interview prep first? (Recommended.)
-2. ~~Look into on your ChatGPT plan~~ **Decided:** ChatGPT through Codex, including web search.
-5. **Marks over colors:** approve the ink marks (`design/proposals/marks/`) instead of colored callouts?
-3. **Desktop speech:** Apple's on-device speech (best quality, macOS 26 and Apple Silicon only) or whisper.cpp (any Mac, ~150 MB download)? Recommended: Apple speech, whisper.cpp as fallback.
-4. **Hosted Publish links:** P1, as above, or pull into launch for the growth loop?
+1. **Private alpha with 10 people** (PM candidates and two founders), using `TESTING.md` and a 15-minute call each.
+2. **Fix the top three janky moments**, then re-run the evals.
+3. **Record the demo:** one take, a product sense answer building itself, with a correction, an estimate and Look into.
+4. **Launch where framers are:** PM interview communities and newsletters. Every Published piece can be played, so every share is a demo.

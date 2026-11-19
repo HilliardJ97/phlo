@@ -46,6 +46,15 @@ Both hate three things: **managing the tool while thinking, the blank page, and 
 - **Scribe** (when someone's watching) only organizes your words: headings, order, lists, cleaned-up speech. It adds no ideas, prompts or research. Every line traces back to the transcript. It turns on **Room view**: large type, no chrome, and a `SCRIBE · YOUR WORDS ONLY` label so the room knows the rule.
 - The principle: **Phlo never puts words in your mouth when someone's watching.** This trust is part of the brand.
 
+### Inside a draft (agreed Nov 19; full spec in `EXPRESSION_SPEC.md`)
+
+- **Page and Board** are two views of the same draft. The Page is for narrowing down: a clear column, in order. The Board is for spreading out: the same blocks as cards on a free surface, clustered by theme. Flip with "spread it out" or ⌘B. Phlo may offer the Board but never flips on its own.
+- **The margin is the only place Phlo speaks.** One card component for asks, suggestions, work in progress, findings and tangents, with strict rules: only at pauses, one per section, three on screen.
+- **Verbs, not agents.** Look into, Push back, Make, Follow up. Say them, right-click, or type `@`. Each runs on the model you've connected. Results arrive in the margin; nothing writes to the page until you pull it in.
+- **References** hold everything from outside: what you paste, what Phlo finds, what your connections bring.
+- **Settle keeps the whole draft in shape**, not just new words: at pauses it merges, reorders and reshapes, then reports it in one chip with Undo. The goal is zero fixes. Settle can be turned off to just type.
+- **Three ways in, always equal:** say it, right-click it, or type `/`.
+
 ### Flow rules
 
 1. **One key to talk.** Hold space, release to stop. No control bar.
@@ -103,8 +112,8 @@ Two themes: **Paper** (light) and **Sumi** (dark, the hero for demos and Room vi
 | ink-muted | #66665f | #9d9c95 | Labels, metadata |
 | ink-wet | #b9b9b2 | #55554f | Unsettled text, spoken or typed. Transient only |
 | vermilion | #e5432a | #ff5b3d | **The voice. Only one vermilion thing on screen** |
-| cobalt / teal / saffron | #2848d8 / #13a38a / #f2b01e | #6683ff / #33c7ac / #ffc340 | Idea colors: theme discs, charts, Published covers. Max 3 per draft |
-| tab | #5cc9e9 | #6fd4ef | "Phlo touched this": tangents, pulled-out ideas, references |
+| cobalt / teal / saffron | #2848d8 / #13a38a / #f2b01e | #6683ff / #33c7ac / #ffc340 | Idea colors: themes only. Theme discs, text tagged with a theme (2px underline), Board clusters, chart series of a theme, Published covers. Max 3 per draft |
+| tab | #5cc9e9 | #6fd4ef | "Phlo touched this": margin cards, tangents, pulled-out ideas, things Phlo added to References, pins |
 
 ### Type
 
@@ -112,6 +121,11 @@ Two themes: **Paper** (light) and **Sumi** (dark, the hero for demos and Room vi
 - **Titles are big and regular weight, never bold.** Title 40/44 at 400, −0.025em. Display 64/64 at 400, −0.035em.
 - Heading 20/28 at 500. Body 16/26. Small 14/20.
 - **Mono labels** do the modern work: 11/16 at 500, uppercase, +0.08em ("01 · MISSION", "SCRIBE · YOUR WORDS ONLY").
+- **Emphasis in body:** italic, underline, and bold at 600. A Key point line is 500. Titles and headings never go bold.
+
+### Marks
+
+Meaning on the page is carried by **shape, not color**: 20 ink marks built only from the symbol family's four parts (round, square, tail, gap), in `brand/marks/`. Five of them head the thinking blocks (Question, Idea, Decision, Action, Key point). They label a category and are never decoration. Emoji are allowed inline, with our marks offered first.
 
 ### Space
 
@@ -135,6 +149,9 @@ Short, warm, plainspoken. Verbs over nouns. One-word UI where possible: **Start 
 | Partner, Scribe, Room view | Interview mode, assistant, AI off |
 | References, Tab | Context, attachments |
 | Settle (a behavior, not a button) | Clean, generate, polish |
+| Page, Board | Whiteboard mode, canvas, doc view |
+| Look into, Push back, Make, Follow up | Agent, bot, run, task |
+| Play | Replay, presentation, video |
 
 ---
 
@@ -152,6 +169,14 @@ Short, warm, plainspoken. Verbs over nouns. One-word UI where possible: **Start 
 | A "Pick up here" ending | The model can work out where new thoughts belong | Dropped |
 | "Flows" as the name for drafts | Muddies the brand, and Wispr Flow already owns "flow" in voice-to-text | Drafts |
 | Present button, four-control talk pill | Too much UI for a hands-free product | Room view and a single voice dot |
+| Colored callouts (green questions, yellow ideas) | Color stops meaning anything, and the page turns into a sticky-note wall | Ink marks from the symbol family's four parts; color stays for themes |
+| Post-its on the page | A third way to say what Marks and margin cards already say | Cards on the Board, where unplaced thoughts belong |
+| A separate whiteboard, then a Map view | Two products, or a view that only shows | Board: the same blocks, spread out, clustered and connected, and folded back |
+| A "Clean" mode for typing | A mode you manage, and a banned word | Settle is on by default and tidies the whole draft at pauses; it can be turned off |
+| Named agents (`@critic`, `@analyst`) | A voice-first user shouldn't learn a roster | Four verbs: Look into, Push back, Make, Follow up |
+| Free text colors | Turns the page into a highlighter mess | Coloring text tags it with one of the draft's three themes |
+| Risk as a Mark | Risks are topics, not moves in your thinking | A section or a Compare column; Action joins the Marks |
+| Generated illustrations | Rarely clearer than a precise mark, and never in the house style | Marks; concept sketches later, in ink only, inside Make |
 
 ---
 
@@ -164,4 +189,6 @@ Short, warm, plainspoken. Verbs over nouns. One-word UI where possible: **Start 
 
 ## 6. What comes after this pass
 
-Published covers and the Published shelf, Publish to doc, deck and prototype, sound (a soft tick when you start talking and a quiet settle), agents doing research in the background, and multiplayer Room view.
+Now specified in `EXPRESSION_SPEC.md`: Page and Board, the margin, the four verbs, the seven shape families, marks, theme colors, Connect, right-click parity, Publish and Play.
+
+Still after that: Published covers and the shelf, Publish to deck, sound (a soft tick when you start talking and a quiet settle), multiplayer Room view, and mobile.

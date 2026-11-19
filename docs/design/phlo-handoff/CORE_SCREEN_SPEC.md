@@ -73,7 +73,7 @@ Both of them hate the same three things: **managing the tool while thinking, a b
   - **Moving the caret or clicking elsewhere:** the block you left settles.
   - **⌘↵:** settle now. Shortcut only, nothing on screen.
 - **Never move or restyle text while the caret is inside it.** No settling on a timer while someone is mid-sentence.
-- Settling uses the same motion as voice: wet → ink, then a glide into the right section. Action items ("talk to 5 couples") go to a **Next** list at the end of the draft.
+- Settling uses the same motion as voice: wet → ink, then a glide into the right section. Action items ("talk to 5 couples") become **Action** marks and collect in **Next** at the end of the draft.
 - The first time someone free-writes, a single mono hint appears below the block: `FINISH THE PARAGRAPH TO SETTLE · ⌘↵ NOW`. It never shows again.
 
 ### 04 Sidebar open
@@ -103,7 +103,9 @@ Both of them hate the same three things: **managing the tool while thinking, a b
 
 ## 6. Out of scope for this pass
 
-Published covers, decks and prototypes from Publish, sound design, agents and research, multiplayer, and the Published shelf design. These come next, once the core loop feels like water.
+Published covers, decks from Publish, sound design, multiplayer, and the Published shelf design.
+
+**Now specified separately in `EXPRESSION_SPEC.md`** (agreed Nov 19): Page and Board, the margin card system, the four verbs (Look into, Push back, Make, Follow up), shape families, marks, theme colors, Connect, right-click parity, Publish and Play. The core loop comes first; those build on it.
 
 ## 7. Build order
 
