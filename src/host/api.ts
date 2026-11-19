@@ -13,7 +13,8 @@ import { ClaudeProvider, DEFAULT_MODEL } from "./ai/claude";
 import { CodexWarmProvider } from "./ai/codexWarm";
 import { CompatProvider } from "./ai/compat";
 import type { SettleProvider } from "./ai/provider";
-import { Orchestrator } from "./ai/orchestrator";
+import { Orchestrator, SupersededError } from "./ai/orchestrator";
+import { CancelledError, Scheduler } from "./scheduler";
 import { Store } from "./store";
 
 export interface Cipher {
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: Settings = {
 export class HostApi {
   readonly store: Store;
   readonly orchestrator: Orchestrator;
+  readonly scheduler = new Scheduler();
   private settings: Settings = DEFAULT_SETTINGS;
   private memKeys: { claude?: string; openai?: string; compat?: string } = {};
   private warm: CodexWarmProvider | null = null;
@@ -151,6 +153,12 @@ export class HostApi {
   }
 
   async openDraft(id?: string): Promise<Draft> {
+    const d = await this.openDraftInner(id);
+    this.scheduler.focus(d.id);
+    return d;
+  }
+
+  private async openDraftInner(id?: string): Promise<Draft> {
     const want = id ?? this.settings.lastDraftId;
     if (want) {
       const d = await this.store.loadDraft(want).catch(() => null);
@@ -190,12 +198,40 @@ export class HostApi {
 
   // ---- settle ----------------------------------------------------------------
 
-  settle(req: SettleRequest): Promise<SettleResponse> {
-    return this.orchestrator.settle(req);
+  async settle(req: SettleRequest): Promise<SettleResponse> {
+    try {
+      return await this.scheduler.run({
+        lane: "hot",
+        kind: "settle",
+        draftId: req.draftId,
+        turnId: req.requestId,
+        // The orchestrator owns the settle deadline and its local fallback; this is only a backstop.
+        timeoutMs: this.orchestrator.status().deadlineMs + 2000,
+        run: () => this.orchestrator.settle(req),
+      });
+    } catch (e) {
+      if (e instanceof CancelledError && e.reason !== "deadline") throw new SupersededError();
+      throw e;
+    }
   }
 
-  ask(req: { draftId: string; outline: string; section: string | null }) {
-    return this.orchestrator.ask(req);
+  async ask(req: { draftId: string; outline: string; section: string | null; turnId?: string }) {
+    try {
+      return await this.scheduler.run({
+        lane: "warm",
+        kind: "ask",
+        draftId: req.draftId,
+        turnId: req.turnId ?? `ask:${req.draftId}:${Date.now()}`,
+        run: () => this.orchestrator.ask(req),
+      });
+    } catch {
+      return { question: null };
+    }
+  }
+
+  /** The renderer says when you start and stop talking; cold work waits meanwhile. */
+  setTalking(on: boolean) {
+    this.scheduler.setTalking(Boolean(on));
   }
 
   stats() {
@@ -356,6 +392,7 @@ export const HOST_METHODS = [
   "deleteDraft",
   "settle",
   "ask",
+  "setTalking",
   "stats",
   "publish",
   "listPublished",

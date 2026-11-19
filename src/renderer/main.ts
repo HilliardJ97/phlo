@@ -742,6 +742,7 @@ async function startTalking(lock = false) {
     return;
   }
   talking = true;
+  void host.setTalking(true).catch(() => undefined);
   locked = lock;
   lastSpeechAt = performance.now();
   document.body.classList.add("talking");
@@ -783,6 +784,7 @@ async function startTalking(lock = false) {
 function stopTalking() {
   if (!talking) return;
   talking = false;
+  void host.setTalking(false).catch(() => undefined);
   locked = false;
   stt?.stop();
   stt = null;
