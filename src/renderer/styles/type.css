@@ -1,0 +1,48 @@
+/*
+ * Derived tokens. The only place sizes live outside tokens.css.
+ * Type shorthands mirror the .type-* styles in tokens.css; layout metrics and
+ * Room view sizes come from CORE_SCREEN_SPEC.md and screens/*.dc.html.
+ */
+:root {
+  --text-display: 400 64px/64px var(--font-sans);
+  --text-title: 400 40px/44px var(--font-sans);
+  --text-heading: 500 20px/28px var(--font-sans);
+  --text-body: 400 16px/26px var(--font-sans);
+  --text-small: 400 14px/20px var(--font-sans);
+  --text-control: 400 13px/18px var(--font-sans);
+  --text-ask: 400 15px/22px var(--font-sans);
+  --text-label: 500 11px/16px var(--font-mono);
+  --text-meta: 400 12px/18px var(--font-mono);
+  --text-wordmark: 500 17px/1 var(--font-sans);
+  --track-display: -0.035em;
+  --track-title: -0.025em;
+  --track-heading: -0.01em;
+  --track-label: 0.08em;
+  --track-meta: 0.02em;
+
+  /* Room view: readable from 2 meters */
+  --room-title: 400 48px/52px var(--font-sans);
+  --room-heading: 500 32px/40px var(--font-sans);
+  --room-body: 400 22px/34px var(--font-sans);
+  --track-room-heading: -0.02em;
+
+  /* Layout */
+  --rail: 64px;
+  --sidebar: 272px;
+  --column: 680px;
+  --column-room: 860px;
+  --gutter: 32px;
+  --page-top: 56px;
+  --page-bottom: 200px;
+  --block-gap: 10px;
+  --dot: 40px;
+  --dot-live: 44px;
+  --dot-halo: 10px;
+  --dot-bottom: 36px;
+  --disc: 10px;
+
+  /* Motion (UI, not settling) */
+  --dur-ui: 160ms;
+  --dim-talking: 0.38;
+  --dim-room: 0.32;
+}

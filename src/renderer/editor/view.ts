@@ -22,7 +22,26 @@ export interface EditorCallbacks {
   onRedo(): void;
 }
 
-const EASE = "cubic-bezier(0.2, 0, 0, 1)";
+/** Motion comes from the tokens, never from component code. */
+function motion() {
+  const cs = getComputedStyle(document.documentElement);
+  const ms = (v: string, d: number) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : d;
+  };
+  return {
+    ease: cs.getPropertyValue("--ease-settle").trim() || "ease-out",
+    color: ms(cs.getPropertyValue("--dur-settle-color"), 280),
+    move: ms(cs.getPropertyValue("--dur-settle-move"), 420),
+  };
+}
+
+/** Blocks shown in the page flow. Tangents live in the margin. */
+export function inPage(b: Block): boolean {
+  return b.tab !== "tangent";
+}
+
+const NEXT = /^next( steps)?$/i;
 
 export function textOf(el: Element): string {
   let s = "";
@@ -122,7 +141,7 @@ export class Editor {
   }
 
   focusEnd() {
-    const blocks = this.engine().state.blocks;
+    const blocks = this.engine().state.blocks.filter(inPage);
     const last = blocks[blocks.length - 1];
     this.root.focus();
     if (last) this.setCaret(last.id, last.text.length);
@@ -141,6 +160,7 @@ export class Editor {
     let num = 0;
     let prev: HTMLElement | null = null;
     for (const b of draft.blocks) {
+      if (!inPage(b)) continue;
       seen.add(b.id);
       let el = this.els.get(b.id);
       if (!el) {
@@ -149,9 +169,11 @@ export class Editor {
         el.dataset.id = b.id;
         this.els.set(b.id, el);
       }
-      if (b.kind === "heading") num++;
+      if (b.kind === "heading" && !NEXT.test(b.text)) num++;
       this.paint(el, b, num, opts.dim?.has(b.id) ?? false);
-      const want: ChildNode | null = prev ? prev.nextSibling : this.root.firstChild;
+      let want: ChildNode | null = prev ? prev.nextSibling : this.root.firstChild;
+      // Interface elements (live words, PHLO ASKS) may sit between blocks: step over them.
+      while (want && want !== el && want instanceof HTMLElement && want.dataset.ui) want = want.nextSibling;
       if (want !== el) this.root.insertBefore(el, want);
       prev = el;
     }
@@ -163,6 +185,7 @@ export class Editor {
     }
     // Stray nodes (browser-inserted) are swept; syncFromDom adopts real text first.
     Array.from(this.root.childNodes).forEach((n) => {
+      if (n instanceof HTMLElement && n.dataset.ui) return;
       if (!(n instanceof HTMLElement && n.dataset.id && this.els.get(n.dataset.id) === n)) n.remove();
     });
 
@@ -174,12 +197,18 @@ export class Editor {
     if (animate) this.glide(before, new Set(opts.settled));
   }
 
+  elementOf(id: string): HTMLElement | undefined {
+    return this.els.get(id);
+  }
+
   private paint(el: HTMLElement, b: Block, num: number, dim: boolean) {
     el.dataset.kind = b.kind;
     el.classList.toggle("wet", b.wet);
     setAttr(el, "data-theme", b.kind === "heading" ? b.theme : undefined);
     setAttr(el, "data-tab", b.tab);
-    setAttr(el, "data-num", b.kind === "heading" ? String(num).padStart(2, "0") : undefined);
+    const isNext = b.kind === "heading" && NEXT.test(b.text);
+    setAttr(el, "data-label", b.kind === "heading" ? (isNext ? "" : `${String(num).padStart(2, "0")} · ${b.text}`) : undefined);
+    el.classList.toggle("next", isNext);
     setAttr(el, "data-dim", dim ? "1" : undefined);
     el.style.setProperty("--depth", String(b.depth ?? 0));
     if (b.kind === "heading") el.setAttribute("role", "heading");
@@ -206,28 +235,23 @@ export class Editor {
       t.dataset.ui = "1";
       t.contentEditable = "false";
       t.textContent = b.trail[b.trail.length - 1];
-      t.title = b.trail.length > 1 ? `${b.trail.length} earlier versions` : "Earlier version";
+      t.title = b.trail.join("  ·  ");
       if (!trail) el.appendChild(t);
-      if (!el.querySelector(":scope > .mark-trail")) {
-        const m = document.createElement("span");
-        m.className = "mark-trail";
-        m.dataset.ui = "1";
-        m.contentEditable = "false";
-        el.appendChild(m);
-      }
     } else {
       el.classList.remove("has-trail");
       trail?.remove();
-      el.querySelector(":scope > .mark-trail")?.remove();
     }
   }
 
   /** Ink settling: color to ink (280ms), then glide into place (420ms). No bounce. */
   private glide(before: Map<string, number>, settled: Set<string>) {
+    const m = motion();
+    if (m.move === 0) return; // reduced motion: color still changes, no glide
+    const total = m.color + m.move;
     for (const [id, el] of this.els) {
       const was = before.get(id);
       if (was === undefined) {
-        if (settled.has(id)) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: EASE });
+        if (settled.has(id)) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: m.move, easing: m.ease });
         continue;
       }
       const dy = was - el.getBoundingClientRect().top;
@@ -236,13 +260,13 @@ export class Editor {
         el.animate(
           [
             { transform: `translateY(${dy}px)` },
-            { transform: `translateY(${dy}px)`, offset: 0.4 },
+            { transform: `translateY(${dy}px)`, offset: m.color / total },
             { transform: "translateY(0)" },
           ],
-          { duration: 700, easing: EASE },
+          { duration: total, easing: m.ease },
         );
       } else {
-        el.animate([{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }], { duration: 420, easing: EASE, delay: 0 });
+        el.animate([{ transform: `translateY(${dy}px)` }, { transform: "translateY(0)" }], { duration: m.move, easing: m.ease });
       }
     }
   }
@@ -274,13 +298,14 @@ export class Editor {
           ops.push({ t: "update", id, patch: shortcut ?? { text } });
         }
         prevId = id;
+      } else if (n instanceof HTMLElement && n.dataset.ui) {
+        continue;
       } else {
         const text = n instanceof HTMLElement ? textOf(n) : (n.textContent ?? "");
         if (text.trim()) strays.push(text);
-        if (strays.length && prevId === null && !model.size) prevId = null;
       }
     }
-    for (const b of eng.state.blocks) if (!domIds.has(b.id)) ops.push({ t: "delete", id: b.id });
+    for (const b of eng.state.blocks) if (inPage(b) && !domIds.has(b.id)) ops.push({ t: "delete", id: b.id });
     let after = prevId ?? (eng.state.blocks.length ? eng.state.blocks[eng.state.blocks.length - 1].id : null);
     for (const s of strays) {
       const id = newId("b");
@@ -352,8 +377,9 @@ export class Editor {
 
     // Enter twice: an empty wet line ends the paragraph and settles it.
     if (!soft && b.wet && !b.text.trim()) {
-      const idx = eng.state.blocks.findIndex((x) => x.id === b.id);
-      const prev = eng.state.blocks[idx - 1];
+      const visible = eng.state.blocks.filter(inPage);
+      const idx = visible.findIndex((x) => x.id === b.id);
+      const prev = visible[idx - 1];
       if (prev?.wet) {
         this.cb.onParagraphEnd();
         return;
@@ -382,7 +408,7 @@ export class Editor {
 
   private backspaceAtStart(id: string) {
     const eng = this.engine();
-    const blocks = eng.state.blocks;
+    const blocks = eng.state.blocks.filter(inPage);
     const i = blocks.findIndex((b) => b.id === id);
     const b = blocks[i];
     if (!b) return;

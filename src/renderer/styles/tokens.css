@@ -1,16 +1,16 @@
-/* Phlo — generated from tokens.json */
+/* Phlo design tokens, generated from tokens.json */
 :root, [data-theme="paper"] {
-  --paper: #f7f7f4; /* The page. The writing surface and the app ground. It stays almost empty. */
-  --paper-raised: #ffffff; /* Things that sit on the page: inline diagrams, tables, prototypes, the context tray. */
-  --hairline: #e4e4df; /* Rules, table lines and dividers. Use borders, not shadows. Decorative only, never a control's only edge. */
-  --ink: #16171a; /* Settled text: anything Phlo has organized onto the page. Headings, body and the wordmark's counter-ink. */
-  --ink-muted: #66665f; /* Metadata, mono labels, running headers, timestamps. 4.5:1 or better on paper in both themes. */
-  --ink-wet: #b9b9b2; /* Speech that has not settled yet: live words on their way into the document. Intentionally below 4.5:1 because it is transient and turns into ink within a second. Never use it for text that stays. */
-  --vermilion: #e5432a; /* The voice. The live mic dot, the wordmark's lead stripe, the recording state. One vermilion thing on screen at a time. For marks and large type only, never small text. */
-  --cobalt: #2848d8; /* Theme color 1 and the wordmark's second stripe. Earned: shows up only once ideas cluster. Also links and focus rings. */
-  --teal: #13a38a; /* Theme color 2. Marks, tab flags and chart series. Not for text on paper. */
-  --saffron: #f2b01e; /* Theme color 3. Marks, tab flags and chart series. Ink text sits on it, never white. */
-  --tab: #5cc9e9; /* The sticky-tab color: Phlo touched this. Callouts the AI pulled out, agent results, flagged ideas. Ink text on it. */
+  --paper: #f7f7f4;
+  --paper-raised: #ffffff;
+  --hairline: #e4e4df;
+  --ink: #16171a;
+  --ink-muted: #66665f;
+  --ink-wet: #b9b9b2;
+  --vermilion: #e5432a;
+  --cobalt: #2848d8;
+  --teal: #13a38a;
+  --saffron: #f2b01e;
+  --tab: #5cc9e9;
 }
 [data-theme="sumi"] {
   --paper: #121316;
@@ -26,72 +26,27 @@
   --tab: #6fd4ef;
 }
 :root {
-  --space-1: 4px; /* Icon-to-label gaps, type nudges. */
-  --space-2: 8px; /* Inside tabs and chips. */
-  --space-3: 16px; /* Between list items and blocks in a section. */
-  --space-4: 24px; /* Between a heading and its first block. */
-  --space-5: 48px; /* Between sections. The default breath. */
-  --space-6: 72px; /* Page side margins at desktop. */
-  --space-7: 120px; /* Above the title and around covers. Ma: the empty space carries weight. */
-  --radius-sm: 2px; /* Sticky tabs and table cells. Paper-cut corners. */
-  --radius-md: 8px; /* Raised blocks: diagrams, prototypes, the context tray. */
-  --radius-full: 999px; /* The voice dot, pills, theme marks. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 48px;
+  --space-6: 72px;
+  --space-7: 120px;
+  --radius-sm: 2px;
+  --radius-md: 8px;
+  --radius-full: 999px;
   --font-sans: "Geist", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
-  --text-display: 400 64px/64px var(--font-sans); /* Covers and empty states. One per screen. */
-  --text-title: 400 40px/44px var(--font-sans); /* Document title. Regular weight, never bold: size carries it. */
-  --text-heading: 500 20px/28px var(--font-sans); /* Section headings Phlo creates as it organizes. */
-  --text-body: 400 16px/26px var(--font-sans); /* Everything you said, settled. */
-  --text-small: 400 14px/20px var(--font-sans); /* Table cells, captions, UI text. */
-  --text-label: 500 11px/16px var(--font-mono); /* Uppercase running headers, section numbers, states. Set text-transform: uppercase. */
-  --text-meta: 400 12px/18px var(--font-mono); /* Timestamps, transcript time codes, source counts. */
+  --ease-settle: cubic-bezier(0.2, 0, 0, 1);
+  --dur-settle-color: 280ms;
+  --dur-settle-move: 420ms;
 }
-.display {
-  font-family: var(--font-sans);
-  font-size: 64px;
-  line-height: 64px;
-  font-weight: 400;
-  letter-spacing: -0.035em;
-}
-.title {
-  font-family: var(--font-sans);
-  font-size: 40px;
-  line-height: 44px;
-  font-weight: 400;
-  letter-spacing: -0.025em;
-}
-.heading {
-  font-family: var(--font-sans);
-  font-size: 20px;
-  line-height: 28px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-.body {
-  font-family: var(--font-sans);
-  font-size: 16px;
-  line-height: 26px;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-.small {
-  font-family: var(--font-sans);
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 400;
-  letter-spacing: 0;
-}
-.label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-}
-.meta {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 400;
-  letter-spacing: 0.02em;
-}
+.type-display { font-family: var(--font-sans); font-size: 64px; line-height: 64px; font-weight: 400; letter-spacing: -0.035em; }
+.type-title { font-family: var(--font-sans); font-size: 40px; line-height: 44px; font-weight: 400; letter-spacing: -0.025em; }
+.type-heading { font-family: var(--font-sans); font-size: 20px; line-height: 28px; font-weight: 500; letter-spacing: -0.01em; }
+.type-body { font-family: var(--font-sans); font-size: 16px; line-height: 26px; font-weight: 400; }
+.type-small { font-family: var(--font-sans); font-size: 14px; line-height: 20px; font-weight: 400; }
+.type-label { font-family: var(--font-mono); font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.type-meta { font-family: var(--font-mono); font-size: 12px; line-height: 18px; font-weight: 400; letter-spacing: 0.02em; }
+@media (prefers-reduced-motion: reduce) { :root { --dur-settle-move: 0ms; } }

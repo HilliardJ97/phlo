@@ -69,7 +69,14 @@ export function matchHeading(text: string, req: SettleRequest): { id: string; sc
   return best && best.score >= 1 ? best : null;
 }
 
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+
 function findHeadingByName(name: string, req: SettleRequest, refs: Map<string, string>): string | null {
+  // Exact name first: "who it's for" is all stop words, so it can't be matched by content words.
+  const exactName = norm(name);
+  for (const [text, ref] of refs) if (norm(text) === exactName) return ref;
+  const byName = req.outline.find((o) => o.kind === "heading" && norm(o.text) === exactName);
+  if (byName) return byName.id;
   const target = contentWords(name).join(" ");
   if (!target) return null;
   for (const [text, ref] of refs) if (contentWords(text).join(" ") === target) return ref;

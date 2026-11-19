@@ -168,6 +168,13 @@ describe("settle", () => {
     expect(texts.indexOf("Risks")).toBeLessThan(texts.indexOf("Next"));
   });
 
+  it("matches headings made only of stop words", () => {
+    const e = seeded();
+    e.commit({ id: "h", actor: "user", label: "h", ops: [{ t: "insert", block: blk("h9", "heading", "Who it's for"), after: "p3" }, { t: "insert", block: blk("w1", "paragraph", "under who it's for: grandparents", true, "voice"), after: "h9" }] });
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: null, recent: [] });
+    expect(localPlan(req)!.placements[0]).toMatchObject({ under: "h9", text: "Grandparents." });
+  });
+
   it("a tangent never lands inside the section being worked on", () => {
     const e = withWet("oh also, could this be a subscription, one book a year");
     const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: [] });
