@@ -71,7 +71,7 @@ export const SettlePlanSchema = z.object({
     .array(
       z.object({
         wet_id: z.string().describe("Which wet item these words came from."),
-        under: z.string().describe("Existing heading id, new heading ref, or 'here' to settle in place."),
+        under: z.string().describe("Existing heading id, new heading ref, 'here' to settle in place, or 'next' for an action item (goes to the Next list at the end)."),
         kind: z.enum(["paragraph", "bullet", "question"]),
         text: z.string().describe("The settled words: speech cleaned up (fillers, false starts, repetition removed), meaning unchanged."),
         tangent: z.boolean().describe("True if this is an aside unrelated to the current thread (Partner only)."),
@@ -245,6 +245,7 @@ export function enforceScribe(plan: SettlePlan, req: SettleRequest): { plan: Set
       text = ensureSentence(cleanSpeech(src));
     }
     if (dropped.has(under)) under = "here";
+    // "Next" is structure, not words: action items may go there in Scribe too.
     return { ...p, text, under, tangent: false };
   });
 
@@ -312,6 +313,16 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
     return order[i];
   };
 
+  /** "End of page" means just before the Next list, which always stays last. */
+  let nextId: string | null = draft.blocks.find((b) => b.kind === "heading" && NEXT_RE.test(b.text))?.id ?? null;
+  const endAnchor = (): string | null => {
+    if (nextId) {
+      const i = order.indexOf(nextId);
+      return i > 0 ? order[i - 1] : null;
+    }
+    return order.length ? order[order.length - 1] : null;
+  };
+
   // 1. New headings.
   const refToId = new Map<string, string>();
   for (const h of plan.new_headings) {
@@ -322,8 +333,7 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
     let after: string | null;
     const anchor = h.after ? (refToId.get(h.after) ?? h.after) : null;
     if (anchor && kindOf.get(anchor) === "heading") after = sectionEnd(anchor);
-    else after = order.length ? order[order.length - 1] : null;
-    // A heading must not land inside a wet block run the user is still on: append at end instead.
+    else after = endAnchor();
     const block: Block = { id, kind: "heading", text, wet: false, rev: 0, origin: "phlo" };
     ops.push({ t: "insert", block, after });
     insertAfter(id, after);
@@ -342,12 +352,21 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
     }
     const text = p.text.trim();
     if (!text) continue;
-    const underId = p.under === "here" ? null : (refToId.get(p.under) ?? p.under);
+    if (p.under === "next" && !nextId) {
+      nextId = newId("h");
+      const after = order.length ? order[order.length - 1] : null;
+      ops.push({ t: "insert", block: { id: nextId, kind: "heading", text: "Next", wet: false, rev: 0, origin: "phlo" }, after });
+      insertAfter(nextId, after);
+      kindOf.set(nextId, "heading");
+      createdIds.push(nextId);
+    }
+    // Tangents stay where they were spoken; they're shown in the margin, never inside the section.
+    const underId = p.tangent || p.under === "here" ? null : p.under === "next" ? nextId : (refToId.get(p.under) ?? p.under);
     if (underId && kindOf.get(underId) !== "heading") {
       issues.push(`placement under non-heading ${p.under}`);
     }
     const target = underId && kindOf.get(underId) === "heading" ? underId : null;
-    const kind: BlockKind = p.kind;
+    const kind: BlockKind = p.under === "next" ? "bullet" : p.kind;
 
     if (!usedWet.has(wet.id)) {
       usedWet.add(wet.id);
@@ -370,6 +389,7 @@ export function compilePlan(draft: Draft, req: SettleRequest, plan: SettlePlan):
       const id = newId("b");
       const after = target ? sectionEnd(target) : wet.id;
       const block: Block = {
+        depth: kind === "bullet" ? 0 : undefined,
         id,
         kind,
         text,
@@ -443,6 +463,7 @@ function headingOfOrder(order: string[], kindOf: Map<string, BlockKind>, id: str
 }
 
 const THEME_MIN_BLOCKS = 3;
+export const NEXT_RE = /^next( steps)?$/i;
 
 function themeOps(draft: Draft, order: string[], kindOf: Map<string, BlockKind>, pending: Op[]): Op[] {
   const counts = new Map<string, number>();
@@ -461,7 +482,7 @@ function themeOps(draft: Draft, order: string[], kindOf: Map<string, BlockKind>,
   for (const [hid, n] of counts) {
     if (n < THEME_MIN_BLOCKS) continue;
     const b = draft.blocks.find((x) => x.id === hid);
-    if (!b || b.theme || pendingUpdate.has(hid)) continue;
+    if (!b || b.theme || pendingUpdate.has(hid) || NEXT_RE.test(b.text)) continue;
     const color = IDEA_COLORS.find((c) => !used.has(c));
     if (!color) break;
     used.add(color);

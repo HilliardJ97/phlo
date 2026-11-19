@@ -51,6 +51,9 @@ class ScriptedProvider implements SettleProvider {
   available() {
     return true;
   }
+  async ask() {
+    return null;
+  }
   async settle(req: SettleRequest, { signal }: { signal: AbortSignal }) {
     this.calls++;
     await new Promise<void>((res, rej) => {

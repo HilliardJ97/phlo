@@ -155,6 +155,28 @@ describe("settle", () => {
     expect(plan.placements[0].text).toBe("Talk, and the page organizes itself, then you publish.");
   });
 
+  it("action items collect in a Next list that stays last", () => {
+    const e = withWet("talk to 5 couples about the price");
+    let req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h2", recent: [] });
+    e.commit({ id: "s", actor: "phlo", label: "Settle", ops: compilePlan(e.snapshot(), req, localPlan(req)!).ops });
+    e.commit({ id: "w2", actor: "voice", label: "speech", ops: [{ t: "insert", block: blk("w2", "paragraph", "new section risks: churn", true, "voice"), after: "p3" }] });
+    req = buildRequest(e.snapshot(), ["w2"], { currentHeadingId: null, recent: [] });
+    e.commit({ id: "s2", actor: "phlo", label: "Settle", ops: compilePlan(e.snapshot(), req, localPlan(req)!).ops });
+    const texts = e.state.blocks.map((b) => b.text);
+    expect(texts.slice(-2)).toEqual(["Next", "Talk to 5 couples about the price"]);
+    expect(e.block("w1")!.kind).toBe("bullet");
+    expect(texts.indexOf("Risks")).toBeLessThan(texts.indexOf("Next"));
+  });
+
+  it("a tangent never lands inside the section being worked on", () => {
+    const e = withWet("oh also, could this be a subscription, one book a year");
+    const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: [] });
+    const plan = localPlan(req)!;
+    expect(plan.placements[0].tangent).toBe(true);
+    e.commit({ id: "s", actor: "phlo", label: "Settle", ops: compilePlan(e.snapshot(), req, plan).ops });
+    expect(e.block("w1")!.tab).toBe("tangent");
+  });
+
   it("scratch that folds the old version into a trail", () => {
     const e = withWet("scratch that, ship the typing-first editor");
     const req = buildRequest(e.snapshot(), ["w1"], { currentHeadingId: "h3", recent: ["p3"] });

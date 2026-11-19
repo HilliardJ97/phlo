@@ -133,6 +133,10 @@ export class HostApi {
     return this.orchestrator.settle(req);
   }
 
+  ask(req: { draftId: string; outline: string; section: string | null }) {
+    return this.orchestrator.ask(req);
+  }
+
   stats() {
     return this.orchestrator.stats();
   }
@@ -147,7 +151,7 @@ export class HostApi {
       title: draft.title || "Untitled",
       format: "doc",
       palette: COVER_PAIRINGS[existing.length % COVER_PAIRINGS.length],
-      blocks: draft.blocks.filter((b) => !b.wet && b.text.trim()),
+      blocks: draft.blocks.filter((b) => !b.wet && b.text.trim() && b.tab !== "tangent"),
       publishedAt: Date.now(),
     };
     await this.store.addPublished(piece);
@@ -230,6 +234,7 @@ export const HOST_METHODS = [
   "saveDraft",
   "deleteDraft",
   "settle",
+  "ask",
   "stats",
   "publish",
   "listPublished",

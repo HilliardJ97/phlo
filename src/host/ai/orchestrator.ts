@@ -14,7 +14,7 @@
  */
 import { isExplicitCommand, localPlan } from "../../engine/local";
 import { enforceScribe, type SettlePlan, type SettleRequest, type SettleResponse } from "../../engine/settle";
-import type { SettleProvider } from "./provider";
+import type { AskRequest, SettleProvider } from "./provider";
 
 export interface TraceEntry {
   requestId: string;
@@ -96,6 +96,20 @@ export class Orchestrator {
         throw new SupersededError();
       }
       return finish(local(), "fallback", undefined, reason);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Partner's stall question. Model only; returns null when unavailable or slow. */
+  async ask(req: AskRequest): Promise<{ question: string | null }> {
+    if (!this.provider?.available()) return { question: null };
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort("deadline"), 8000);
+    try {
+      return { question: await this.provider.ask(req, { signal: ctrl.signal }) };
+    } catch {
+      return { question: null };
     } finally {
       clearTimeout(timer);
     }

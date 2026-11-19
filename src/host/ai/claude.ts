@@ -1,8 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { SettlePlanSchema, type SettlePlan, type SettleRequest } from "../../engine/settle";
-import { SETTLE_SYSTEM, settleUserMessage } from "./prompts";
-import type { ProviderCallOptions, SettleProvider } from "./provider";
+import { z } from "zod";
+import { ASK_SYSTEM, askUserMessage, SETTLE_SYSTEM, settleUserMessage } from "./prompts";
+import type { AskRequest, ProviderCallOptions, SettleProvider } from "./provider";
+
+const AskSchema = z.object({ question: z.string().nullable() });
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
 
@@ -48,5 +51,23 @@ export class ClaudeProvider implements SettleProvider {
     if (res.stop_reason === "max_tokens") throw new Error("Plan was cut off");
     if (!res.parsed_output) throw new Error("Model returned no plan");
     return res.parsed_output;
+  }
+
+  async ask(req: AskRequest, opts: ProviderCallOptions): Promise<string | null> {
+    const res = await this.api().beta.messages.parse(
+      {
+        model: this.model,
+        betas: ["server-side-fallback-2026-07-01"],
+        fallbacks: "default",
+        max_tokens: 2000,
+        output_config: { effort: "low", format: betaZodOutputFormat(AskSchema) },
+        system: [{ type: "text", text: ASK_SYSTEM, cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: askUserMessage(req.outline, req.section) }],
+      },
+      { signal: opts.signal },
+    );
+    if (res.stop_reason !== "end_turn" || !res.parsed_output) return null;
+    const q = res.parsed_output.question?.trim();
+    return q ? q : null;
   }
 }

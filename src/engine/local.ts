@@ -13,6 +13,8 @@ const NEW_SECTION =
   /^(?:ok(?:ay)?,?\s+)?(?:new|add(?: a)?|start(?: a)?|make(?: a)?|create(?: a)?)\s+(?:section|heading|header)(?:\s+(?:called|named|for|on|about))?\s*[:,-]?\s*(.+?)[.!]?$/i;
 const UNDER = /^(?:under|in|for|to)\s+(?:the\s+)?(.+?)(?:\s+(?:section|heading))?\s*[:,—-]\s*(.+)$/i;
 const SCRATCH = /^(?:scratch that|strike that|actually,?\s*no|no wait|never ?mind|change that)[,.:!\s-]*(?:(?:it'?s|make it|to|instead|rather)[,:\s]+)?(.*)$/i;
+const TANGENT = /^(?:oh,?\s+)?(?:also|side note|tangent|unrelated|random thought|by the way|btw)[,:\s]+(.+)$/i;
+const ACTION = /^(?:(?:i|we)\s+(?:need|have|should|must|will|gotta|got)\s+to\s+|todo[,:\s]+|to do[,:\s]+|next step[,:\s]+|remember to\s+|action item[,:\s]+)(.+)$|^(?:talk to|call|email|text|follow up with|send|schedule|book|ask|reach out to|interview)\s+.+$/i;
 const QUESTION_START = /^(?:what|why|how|who|when|where|which|should|could|would|can|do|does|is|are|will)\b/i;
 
 export interface LocalOptions {
@@ -144,6 +146,19 @@ export function localPlan(req: SettleRequest, opts: LocalOptions = {}): SettlePl
     }
 
     if (opts.commandsOnly) return null;
+
+    const tg = req.role === "partner" && w.origin === "voice" ? TANGENT.exec(text) : null;
+    if (tg && req.outline.some((o) => o.kind === "heading")) {
+      const kind = kindFor(tg[1], w.origin);
+      plan.placements.push({ wet_id: w.id, under: "here", kind, text: polish(tg[1], kind), tangent: true });
+      continue;
+    }
+    const act = ACTION.exec(text);
+    if (act) {
+      const body = (act[1] ?? text).replace(/[.!]+$/, "");
+      plan.placements.push({ wet_id: w.id, under: "next", kind: "bullet", text: polish(body, "bullet"), tangent: false });
+      continue;
+    }
 
     const kind = kindFor(text, w.origin);
     let under: string = "here";
