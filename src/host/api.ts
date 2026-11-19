@@ -10,6 +10,8 @@ import { newId } from "../engine/ids";
 import { COVER_PAIRINGS, emptyDraft, type Draft, type PublishedPiece } from "../engine/model";
 import type { SettleRequest, SettleResponse } from "../engine/settle";
 import { ClaudeProvider, DEFAULT_MODEL } from "./ai/claude";
+import { CodexProvider } from "./ai/codex";
+import type { SettleProvider } from "./ai/provider";
 import { Orchestrator } from "./ai/orchestrator";
 import { Store } from "./store";
 
@@ -27,7 +29,12 @@ export const memoryCipher: Cipher = {
   decrypt: () => "",
 };
 
+export type ProviderChoice = "chatgpt" | "claude" | "local";
+
 interface Settings {
+  provider: ProviderChoice;
+  /** ChatGPT model id for Codex; empty = the plan's default. */
+  chatgptModel: string;
   theme: "paper" | "sumi" | "system";
   model: string;
   claudeKeyEnc?: string;
@@ -35,7 +42,7 @@ interface Settings {
   lastDraftId?: string;
 }
 
-const DEFAULT_SETTINGS: Settings = { theme: "system", model: DEFAULT_MODEL };
+const DEFAULT_SETTINGS: Settings = { provider: "chatgpt", chatgptModel: "", theme: "system", model: DEFAULT_MODEL };
 
 export class HostApi {
   readonly store: Store;
@@ -49,14 +56,24 @@ export class HostApi {
     private env: NodeJS.ProcessEnv = process.env,
   ) {
     this.store = new Store(dataDir);
-    this.orchestrator = new Orchestrator(new ClaudeProvider(() => this.claudeKey(), DEFAULT_MODEL));
+    this.orchestrator = new Orchestrator(null);
   }
 
   async init() {
     await this.store.init();
     this.settings = await this.store.readSettings(DEFAULT_SETTINGS);
-    this.orchestrator.setProvider(new ClaudeProvider(() => this.claudeKey(), this.settings.model || DEFAULT_MODEL));
+    this.applyProvider();
     return this;
+  }
+
+  /** ChatGPT (via Codex, on your plan) by default; Claude with a key; local rules always as the floor. */
+  private applyProvider() {
+    const s = this.settings;
+    let p: SettleProvider | null = null;
+    if (s.provider === "chatgpt") p = new CodexProvider(s.chatgptModel || "", "low");
+    else if (s.provider === "claude") p = new ClaudeProvider(() => this.claudeKey(), s.model || DEFAULT_MODEL);
+    // A process per Codex call is slower than an API: give it more room before falling back.
+    this.orchestrator.setProvider(p, s.provider === "chatgpt" ? 20_000 : 9000);
   }
 
   private claudeKey(): string | undefined {
@@ -169,16 +186,20 @@ export class HostApi {
       theme: this.settings.theme,
       model: this.settings.model,
       claude: !!this.claudeKey(),
+      provider: this.settings.provider,
+      chatgptModel: this.settings.chatgptModel,
       openai: !!this.openaiKey(),
       secureStorage: this.cipher.secure,
       ai: this.orchestrator.status(),
     };
   }
 
-  async setSettings(patch: { theme?: Settings["theme"]; claudeKey?: string; openaiKey?: string; model?: string }) {
+  async setSettings(patch: { theme?: Settings["theme"]; claudeKey?: string; openaiKey?: string; model?: string; provider?: ProviderChoice; chatgptModel?: string }) {
     const next = { ...this.settings };
     if (patch.theme) next.theme = patch.theme;
     if (patch.model) next.model = patch.model;
+    if (patch.provider && ["chatgpt", "claude", "local"].includes(patch.provider)) next.provider = patch.provider;
+    if (patch.chatgptModel !== undefined && /^[a-z0-9.\-]{0,64}$/i.test(patch.chatgptModel)) next.chatgptModel = patch.chatgptModel;
     for (const [field, enc, mem] of [
       ["claudeKey", "claudeKeyEnc", "claude"],
       ["openaiKey", "openaiKeyEnc", "openai"],
@@ -195,7 +216,7 @@ export class HostApi {
     }
     this.settings = next;
     await this.store.writeSettings(next);
-    this.orchestrator.setProvider(new ClaudeProvider(() => this.claudeKey(), next.model || DEFAULT_MODEL));
+    this.applyProvider();
     return this.getSettings();
   }
 

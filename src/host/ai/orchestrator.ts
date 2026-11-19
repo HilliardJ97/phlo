@@ -36,7 +36,10 @@ export interface OrchestratorOptions {
 export class Orchestrator {
   private inflight = new Map<string, AbortController>();
   private traces: TraceEntry[] = [];
-  private readonly deadlineMs: number;
+  private deadlineMs: number;
+  /** After a plan-limit error, settle locally until this time instead of failing every call. */
+  private coolUntil = 0;
+  private calls: number[] = [];
 
   constructor(
     private provider: SettleProvider | null,
@@ -45,14 +48,23 @@ export class Orchestrator {
     this.deadlineMs = opts.deadlineMs ?? 9000;
   }
 
-  setProvider(p: SettleProvider | null) {
+  setProvider(p: SettleProvider | null, deadlineMs?: number) {
     this.provider = p;
+    if (deadlineMs) this.deadlineMs = deadlineMs;
+    this.coolUntil = 0;
+  }
+
+  private modelReady(): boolean {
+    return !!this.provider?.available() && Date.now() >= this.coolUntil;
   }
 
   status() {
     return {
-      provider: this.provider?.available() ? this.provider.name : "local",
-      model: this.provider?.available() ? this.provider.model : null,
+      provider: this.modelReady() ? this.provider!.name : "local",
+      model: this.modelReady() ? this.provider!.model || "default" : null,
+      coolingUntil: this.coolUntil > Date.now() ? this.coolUntil : null,
+      /** Model calls in the last 5 hours: the ChatGPT plan's usage window. */
+      callsLast5h: this.calls.filter((t) => Date.now() - t < 5 * 3600_000).length,
       deadlineMs: this.deadlineMs,
     };
   }
@@ -83,18 +95,21 @@ export class Orchestrator {
     if (!req.wet.length) return finish(local(), "local");
 
     const allCommands = req.wet.every((w) => isExplicitCommand(w.text));
-    if (allCommands || !this.provider?.available()) return finish(local(), "local");
+    if (allCommands || !this.modelReady()) return finish(local(), "local");
+    this.calls.push(Date.now());
+    if (this.calls.length > 2000) this.calls.splice(0, 1000);
 
     const timer = setTimeout(() => ctrl.abort("deadline"), this.deadlineMs);
     try {
-      const plan = await this.provider.settle(req, { signal: ctrl.signal });
-      return finish(plan, "model", this.provider.model);
+      const plan = await this.provider!.settle(req, { signal: ctrl.signal });
+      return finish(plan, "model", this.provider!.model);
     } catch (err) {
       const reason = ctrl.signal.aborted ? String(ctrl.signal.reason) : err instanceof Error ? err.message : String(err);
       if (reason === "superseded") {
         this.trace({ requestId: req.requestId, draftId: req.draftId, at: Date.now(), route: "superseded", latencyMs: Math.round(performance.now() - started), wetCount: req.wet.length });
         throw new SupersededError();
       }
+      if ((err as { code?: string })?.code === "USAGE_LIMIT") this.coolUntil = Date.now() + 30 * 60_000;
       return finish(local(), "fallback", undefined, reason);
     } finally {
       clearTimeout(timer);
@@ -103,11 +118,12 @@ export class Orchestrator {
 
   /** Partner's stall question. Model only; returns null when unavailable or slow. */
   async ask(req: AskRequest): Promise<{ question: string | null }> {
-    if (!this.provider?.available()) return { question: null };
+    if (!this.modelReady()) return { question: null };
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort("deadline"), 8000);
     try {
-      return { question: await this.provider.ask(req, { signal: ctrl.signal }) };
+      this.calls.push(Date.now());
+      return { question: await this.provider!.ask(req, { signal: ctrl.signal }) };
     } catch {
       return { question: null };
     } finally {

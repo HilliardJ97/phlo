@@ -108,6 +108,8 @@ app.innerHTML = `
   <dialog class="settings" id="settings">
     <form method="dialog">
       <h2>Your AI</h2>
+      <label class="label">Settle with<select name="provider"><option value="chatgpt">ChatGPT · your plan, through Codex</option><option value="claude">Claude · API key</option><option value="local">On this Mac only · fast rules</option></select></label>
+      <p class="note" id="provider-note"></p>
       <label class="label">Claude key<input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-…" /></label>
       <p class="note" id="claude-note"></p>
       <label class="label">Transcription key (OpenAI)<input type="password" name="openaiKey" autocomplete="off" placeholder="sk-…" /></label>
@@ -965,6 +967,18 @@ async function openSettings() {
   settings = await host.getSettings();
   const f = dialog.querySelector("form")!;
   (f.elements.namedItem("theme") as HTMLSelectElement).value = settings.theme;
+  (f.elements.namedItem("provider") as HTMLSelectElement).value = settings.provider;
+  const ai = settings.ai;
+  $("provider-note").textContent =
+    settings.provider === "chatgpt"
+      ? ai.provider === "chatgpt"
+        ? `Connected through Codex · ${ai.callsLast5h} requests in the last 5 hours`
+        : ai.coolingUntil
+          ? "Plan limit reached. Settling on this Mac until it resets."
+          : "Install Codex and run codex login with your ChatGPT account. Until then, Phlo settles with fast rules."
+      : settings.provider === "claude"
+        ? settings.claude ? "Connected" : "Add a Claude key below."
+        : "Nothing leaves this Mac. Placement is simpler.";
   (f.elements.namedItem("claudeKey") as HTMLInputElement).value = "";
   (f.elements.namedItem("openaiKey") as HTMLInputElement).value = "";
   $("claude-note").textContent = settings.claude ? `Connected · ${settings.model}` : "Without a key, Phlo settles with fast local rules.";
@@ -979,7 +993,10 @@ async function openSettings() {
 dialog.addEventListener("close", async () => {
   if (dialog.returnValue !== "save") return;
   const f = dialog.querySelector("form")!;
-  const patch: Record<string, string> = { theme: (f.elements.namedItem("theme") as HTMLSelectElement).value };
+  const patch: Record<string, string> = {
+    theme: (f.elements.namedItem("theme") as HTMLSelectElement).value,
+    provider: (f.elements.namedItem("provider") as HTMLSelectElement).value,
+  };
   const ck = (f.elements.namedItem("claudeKey") as HTMLInputElement).value.trim();
   const ok = (f.elements.namedItem("openaiKey") as HTMLInputElement).value.trim();
   if (ck) patch.claudeKey = ck;

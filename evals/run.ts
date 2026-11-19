@@ -3,7 +3,9 @@
  * the app uses (buildRequest -> Orchestrator -> compilePlan -> DocEngine.commit)
  * and grades every turn against its goldens.
  *
- *   npm run eval                      # Claude if ANTHROPIC_API_KEY is set, else local rules
+ *   npm run eval                      # ChatGPT via Codex if signed in (or Claude if ANTHROPIC_API_KEY), else local
+ *   npm run eval -- --chatgpt         # ChatGPT plan through Codex (~35 requests: mind your 5-hour window)
+ *   PHLO_MODEL=<id> PHLO_REASONING=minimal npm run eval -- --chatgpt   # compare models / effort
  *   npm run eval -- --local           # force the local route
  *   npm run eval -- --only interview  # one scenario
  *
@@ -18,16 +20,26 @@ import { newId } from "../src/engine/ids";
 import { emptyDraft, type Block } from "../src/engine/model";
 import { buildRequest, compilePlan, headingOf, noveltyRatio, NEXT_RE } from "../src/engine/settle";
 import { ClaudeProvider } from "../src/host/ai/claude";
+import { CodexProvider } from "../src/host/ai/codex";
+import type { SettleProvider } from "../src/host/ai/provider";
 import { Orchestrator } from "../src/host/ai/orchestrator";
 import { SCENARIOS, type Check, type Scenario } from "./goldens";
 
 const args = process.argv.slice(2);
 const forceLocal = args.includes("--local");
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-const key = forceLocal ? undefined : process.env.ANTHROPIC_API_KEY;
-const provider = key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
-const orch = new Orchestrator(provider, { deadlineMs: 30_000 });
-const route = provider ? provider.model : "local";
+const want = forceLocal ? "local" : args.includes("--claude") ? "claude" : args.includes("--chatgpt") ? "chatgpt" : "auto";
+const key = process.env.ANTHROPIC_API_KEY;
+function pick(): SettleProvider | null {
+  if (want === "local") return null;
+  if (want === "claude" || (want === "auto" && key)) return key ? new ClaudeProvider(() => key, process.env.PHLO_MODEL || undefined) : null;
+  const codex = new CodexProvider(process.env.PHLO_MODEL || "", (process.env.PHLO_REASONING as "minimal" | "low" | "medium") || "low");
+  return codex.available() ? codex : null;
+}
+const provider = pick();
+if (want !== "local" && !provider) console.log(`(${want === "claude" ? "no ANTHROPIC_API_KEY" : "Codex not installed or not signed in"}: falling back to local rules)\n`);
+const orch = new Orchestrator(provider, { deadlineMs: 60_000 });
+const route = provider ? `${provider.name}${provider.model ? `-${provider.model}` : ""}` : "local";
 
 const lc = (s: string) => s.toLowerCase();
 const has = (text: string, words: string[]) => words.every((w) => lc(text).includes(lc(w)));

@@ -14,10 +14,9 @@ npm test             # engine, settle and benchmark tests
 npm run eval         # live settle-quality eval (set ANTHROPIC_API_KEY to use Claude)
 ```
 
-Open **Settings** from the sidebar (click the symbol, or ⌘\\):
+**AI, no API key:** Phlo settles with ChatGPT on your plan through the Codex CLI, like the prototype. Install Codex and sign in once: `npm i -g @openai/codex && codex login` (choose ChatGPT). Without it, Phlo settles with fast local rules. **Your AI** in the sidebar switches to Claude (API key) or on-this-Mac only.
 
-- **Claude key**: Phlo settles with Claude. Without one, it settles with fast local rules.
-- **Transcription key (OpenAI)**: needed to talk in the desktop app. In Chrome (`npm run web`), Chrome's built-in speech works without it.
+**Talking with no keys:** use `npm run web` in Chrome, which has free built-in speech. The desktop app needs an OpenAI transcription key until on-device speech lands (see `docs/ARCHITECTURE_REVIEW.md`).
 
 Keys are encrypted with the system keychain in the desktop app and never reach the page.
 

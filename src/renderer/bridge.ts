@@ -13,7 +13,9 @@ export interface HostSettings {
   claude: boolean;
   openai: boolean;
   secureStorage: boolean;
-  ai: { provider: string; model: string | null; deadlineMs: number };
+  provider: "chatgpt" | "claude" | "local";
+  chatgptModel: string;
+  ai: { provider: string; model: string | null; deadlineMs: number; coolingUntil: number | null; callsLast5h: number };
 }
 
 export class HostError extends Error {
