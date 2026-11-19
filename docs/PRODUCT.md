@@ -70,16 +70,22 @@ The flow-breaker today is the moment you hit something you don't know. You leave
 - **No embedded web browser.** A real browser inside Phlo means tabs, logins and a security surface, and it pulls you out of flow. A reader view of a reference in the sidebar does the job.
 - **No autonomous agents running unasked.** Partner may *offer* ("Check this number?") but never starts work on its own.
 
-## 6. Margin marks: post-its, arrows, saving for later
+## 6. Expression, refined
 
-Expression beyond a page of text, kept simple:
+The full design is in `EXPRESSION_SYSTEM.md`. The decisions:
 
-| You want | MVP answer | Status |
-|---|---|---|
-| A post-it | **Tabs in the margin.** Tangents ("oh also…") already land there. Add: say "note: …" or press `N` to drop your own note beside any line. | Tangents built; your own notes are new (small) |
-| Save for later | **Later.** Tangents and "park X" go to a Later list at the end of the draft. | Built |
-| Arrows between things | **Connect** (P1): "connect this to pricing" draws a hairline from one block to another, in the margin. No free drawing on the page. | P1 |
-| A whiteboard | Not in the MVP. A canvas is a second product. Flow, columns, timeline and charts cover the shapes people reach for. | Later |
+| Idea | Decision |
+|---|---|
+| Every shape you could need | **Eight families, one word each:** Text, Marks, Compare, Flow, Chart, Map, Make, Media. Phlo picks the variant (pie or line, cycle or timeline); you can say a different one. |
+| Post-its | **Cut.** Marks (Question, Idea, Decision, Note, Risk, Key point) and margin cards already do that job. A post-it would be a third way to say the same thing. |
+| Green questions, yellow ideas | **Shape, not color.** Twenty ink marks built from the brand's four parts. Color stays earned for themes. |
+| Highlight what's important | **Key point:** "that's really important" marks the line, and key points become the Published summary. |
+| Arrows | **Connect**, plus **Map view** (the Obsidian-like view of how ideas link). |
+| Phlo chiming in | **One margin card** for asks, suggestions, research and tangents, with strict rules for stacking, answering by voice, and fading. |
+| Moving things | **Drag, keys, or voice.** Never copy and paste. |
+| Prototypes you comment on | **Make:** talk while looking, notes become pins on exact elements, "update it" runs the next pass. |
+| Generated images | **Mostly replaced by marks.** Making images moves to Make and Publish covers, later. |
+| A whiteboard | Not in the MVP. A canvas is a second product. |
 
 ## 7. MVP scope
 
@@ -96,7 +102,11 @@ Expression beyond a page of text, kept simple:
 | Forms | Headings, subheadings and toggles, lists, question, decision, idea, note, table, flow, timeline, columns, chart, image, find a photo, video | ✅ (generate image needs a paid key: P1) |
 | Partner and Scribe | Partner: tabs, one question when you stall, suggestions. Scribe: your words only, Room view | ✅ · 🟡 PHLO ASKS needs a live run |
 | **Look into and Ideas** | §5 | ⬜ **new** |
-| Your own margin notes | "Note: …" or `N` | ⬜ small |
+| Margin cards | One component for Ask, Suggest, Found, Later, Working, with stacking and fade rules | 🟡 tangents and asks exist · ⬜ unified system |
+| Marks and Key point | Twenty ink marks on Marks, pillars and cards; "that's important" | ⬜ marks drawn (proposal) |
+| Chart and Flow variants | Pie, area, scatter, stacked; cycle, branch, steps, funnel, pillars; Phlo picks the variant | 🟡 bar, line, histogram, flow, timeline, columns · ⬜ the rest |
+| Move blocks | Drag grip, ⌥⇧↑↓, voice | 🟡 voice · ⬜ drag and keys |
+| Long sessions | 60 minutes of talking settles as fast as minute one, and callbacks to minute 3 land | ⬜ memory tiers (`ARCHITECTURE.md` §6b) |
 | References | Paste links and screenshots; read them in the sidebar; refer by voice | ✅ paste · ⬜ reader view |
 | Publish | A read view, plus **export to a single HTML file and PDF** you can send | ✅ view · ⬜ export |
 | Drafts persist | Local-first, atomic saves, journal, selective undo | ✅ |
@@ -106,10 +116,10 @@ Expression beyond a page of text, kept simple:
 ### P1: right after launch
 
 - **Hosted Publish link** with a quiet "Made with Phlo" mark. The growth loop: every shared page is an ad.
-- **Connect** (arrows between blocks).
-- **Diagrams:** tree, 2×2, metric tree, concept map.
-- **Wireframes and clickable prototypes** (ported from `prototype/local-workspace`).
-- **Generate image** through a capped key.
+- **Connect and Map view.**
+- **Make:** wireframes you annotate by voice, then clickable prototypes (ported from `prototype/local-workspace`).
+- **Diagrams:** tree, 2×2, mind map.
+- **Reader view** for PDF, Markdown and HTML References.
 - **Interview mode:** a timer and a product sense frame for the framer audience.
 
 ### Not now, and why
@@ -155,6 +165,7 @@ Expression beyond a page of text, kept simple:
 ## 11. Decisions for Justin
 
 1. **Launch audience:** PM interview prep first? (Recommended.)
-2. **Look into on your ChatGPT plan:** OK to use Codex web search for errands? It's free, but it uses the same usage window as settling.
+2. ~~Look into on your ChatGPT plan~~ **Decided:** ChatGPT through Codex, including web search.
+5. **Marks over colors:** approve the ink marks (`design/proposals/marks/`) instead of colored callouts?
 3. **Desktop speech:** Apple's on-device speech (best quality, macOS 26 and Apple Silicon only) or whisper.cpp (any Mac, ~150 MB download)? Recommended: Apple speech, whisper.cpp as fallback.
 4. **Hosted Publish links:** P1, as above, or pull into launch for the growth loop?

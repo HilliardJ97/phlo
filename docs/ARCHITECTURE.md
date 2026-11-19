@@ -130,7 +130,30 @@ render: color to ink 280 ms, then glide 420 ms (FLIP), reduced motion respected
 
 **Budget governor (to build):** paid providers carry a monthly cap you set (default $0). The registry tracks spend from each response's usage and refuses to route past the cap. That's what makes "free by default" a guarantee and not a hope.
 
-**Context windowing (to build):** send headings, the active section and recent blocks, not the whole draft. It keeps a 40-section draft as fast as a 4-section one.
+**Context windowing (to build):** see §6b. It keeps a 60-minute, 40-section draft as fast as a 4-section one.
+
+## 6b. Memory: staying sharp through a 60-minute riff
+
+**The problem.** At minute 45 you say "like the newsletter thing I mentioned at the start" or "not forty, sixty" about a number from minute 3. Phlo has to find it. The naive fixes both fail: sending the whole transcript makes every settle slower and costlier as the session grows, and a single growing chat thread does the same thing in a less visible way.
+
+**Phlo's advantage: the page *is* the memory.** Every settle compresses speech into a titled outline with ids. That outline is a better summary than any model-written one, because you can see it and fix it. Muse (now Allume) keeps history with a local-first CRDT sync engine; Phlo's journal and trails already keep every version of every word. What's missing is how the *model* sees a long session.
+
+**Four tiers, assembled fresh for every request:**
+
+| Tier | What | Size | Always sent? |
+|---|---|---|---|
+| **Now** | The last ~2 minutes of speech, verbatim, plus wet words | ~400 words | Yes |
+| **Page** | Headings, plus the active section in full, plus a one-line digest for every other section | ~1–2k tokens however long the draft | Yes |
+| **Recall** | Earlier utterances and blocks that match what you just said | Up to ~600 tokens | Only when needed |
+| **Ledger** | Every name, number, date and quantity you've said, with where it lives | Lookup, not prompt | Used by corrections and Recall |
+
+**How Recall triggers:** a deterministic check, not a model call. Phrases like "earlier", "I said", "go back to", "the X thing", a pronoun with nothing nearby to refer to, or a correction whose old value isn't in the active section. Retrieval is lexical (BM25 over the transcript) plus the Ledger; on-device embeddings get added only if the replay evals show lexical misses.
+
+**Section digests** are written in the cold lane whenever a section changes and you've moved on. One cheap call, never on the hot path. In Scribe they're internal only and never shown.
+
+**Stateless requests, stateful store.** Each settle is assembled from the tiers and sent as a fresh turn, rather than piling onto one long model thread. That keeps latency flat from minute 1 to minute 60, makes every request replayable in evals, and means a model or provider switch mid-session loses nothing. (Keeping the warm Codex process for speed is separate from keeping one ever-growing thread.)
+
+**Target:** settle p50 at minute 60 within 10% of minute 1. **Test:** a 45-minute golden session with callbacks to minutes 3, 12 and 30.
 
 ## 7. Quality loop
 
@@ -153,7 +176,7 @@ In build order. Each is a commit with tests.
 2. **Look into and Ideas** (cold lane). Voice intents → job → Codex turn with web search and a schema `{findings: [{text, source, date}]}` → References in the margin → pull in through `commit`. *~1–2 days.*
 3. **On-device speech in the desktop app.** A small Swift helper using Apple's speech (macOS 26), whisper.cpp as fallback, streaming partial words as wet text. *~2 days.* Removes the last paid dependency.
 4. **Budget governor and capability registry.** Replace the ordered chain with capability routing; add spend caps. *~½ day.*
-5. **Context windowing.** *~½ day.*
+5. **Memory tiers** (§6b): Now, Page with digests, Recall, Ledger, plus the 45-minute golden. *~2 days.*
 6. **Publish export** to one self-contained HTML file and PDF. *~½ day.*
 7. **Replay harness** from journals. *~1 day.*
 
