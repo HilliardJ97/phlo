@@ -64,6 +64,7 @@ export const host = {
   settle: (req: SettleRequest) => call<SettleResponse>("settle", req),
   ask: (req: { draftId: string; outline: string; section: string | null }) => call<{ question: string | null }>("ask", req),
   setTalking: (on: boolean) => call<void>("setTalking", on),
+  connectChatGPT: () => call<{ ok: boolean; message: string }>("connectChatGPT"),
   stats: () => call<{ routes: { route: string; count: number; p50: number | null; p95: number | null }[]; provider: string; model: string | null }>("stats"),
   publish: (d: Draft) => call<PublishedPiece>("publish", d),
   listPublished: () => call<PublishedPiece[]>("listPublished"),

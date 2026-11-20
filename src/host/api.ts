@@ -11,6 +11,8 @@ import { COVER_PAIRINGS, emptyDraft, type Draft, type PublishedPiece } from "../
 import type { SettleRequest, SettleResponse } from "../engine/settle";
 import { ClaudeProvider, DEFAULT_MODEL } from "./ai/claude";
 import { CodexWarmProvider } from "./ai/codexWarm";
+import { cleanEnv, codexBinary } from "./ai/codex";
+import { spawn } from "node:child_process";
 import { CompatProvider } from "./ai/compat";
 import type { SettleProvider } from "./ai/provider";
 import { Orchestrator, SupersededError } from "./ai/orchestrator";
@@ -88,6 +90,27 @@ export class HostApi {
     this.settings = await this.store.readSettings(DEFAULT_SETTINGS);
     this.applyProvider();
     return this;
+  }
+
+  /**
+   * One-step ChatGPT sign-in: runs Codex's login, which opens your browser.
+   * Resolves when you've signed in (or gave up), then reconnects settling.
+   */
+  async connectChatGPT(): Promise<{ ok: boolean; message: string }> {
+    const bin = codexBinary();
+    if (!bin) return { ok: false, message: "Codex is missing. Run npm install in the Phlo folder." };
+    const ok = await new Promise<boolean>((resolve) => {
+      const child = spawn(bin, ["login"], { env: cleanEnv(), stdio: "ignore" });
+      const timer = setTimeout(() => (child.kill(), resolve(false)), 5 * 60_000);
+      child.on("exit", (code) => (clearTimeout(timer), resolve(code === 0)));
+      child.on("error", () => (clearTimeout(timer), resolve(false)));
+    });
+    if (ok) {
+      this.settings = { ...this.settings, provider: "chatgpt" };
+      await this.store.writeSettings(this.settings);
+      this.applyProvider();
+    }
+    return ok ? { ok, message: "ChatGPT connected. Phlo settles on your plan now." } : { ok, message: "Sign-in didn't finish. Try again from Your AI." };
   }
 
   /** ChatGPT (via Codex, on your plan) by default; Claude with a key; local rules always as the floor. */
@@ -395,6 +418,7 @@ export const HOST_METHODS = [
   "settle",
   "ask",
   "setTalking",
+  "connectChatGPT",
   "stats",
   "publish",
   "listPublished",

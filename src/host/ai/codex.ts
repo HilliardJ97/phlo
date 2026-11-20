@@ -23,7 +23,13 @@ import type { AskRequest, ProviderCallOptions, SettleProvider } from "./provider
 const AskSchema = z.object({ question: z.string().nullable() });
 const BUNDLED = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex";
 
+/** Codex ships with Phlo (npm dependency), so nobody has to install it. A global or ChatGPT-app copy also works. */
 export function codexBinary(): string | null {
+  const here = typeof __dirname === "string" ? [path.resolve(__dirname, "../.."), path.resolve(__dirname, "../../..")] : [];
+  for (const root of [process.cwd(), ...here]) {
+    const local = path.join(root, "node_modules", ".bin", process.platform === "win32" ? "codex.cmd" : "codex");
+    if (existsSync(local)) return local;
+  }
   const which = spawnSync(process.platform === "win32" ? "where" : "which", ["codex"], { encoding: "utf8" });
   const found = which.status === 0 ? which.stdout.split("\n")[0].trim() : "";
   if (found) return found;
@@ -139,8 +145,10 @@ export class CodexProvider implements SettleProvider {
 }
 
 /** Codex must use the ChatGPT sign-in, never an API key that happens to be in the environment. */
-function cleanEnv(): NodeJS.ProcessEnv {
+export function cleanEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
+  // Apps opened from the Dock don't get the shell's PATH; Codex's launcher needs node.
+  env.PATH = [env.PATH, "/opt/homebrew/bin", "/usr/local/bin", path.dirname(process.execPath)].filter(Boolean).join(path.delimiter);
   for (const k of Object.keys(env)) {
     if (["OPENAI_API_KEY", "CODEX_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY"].includes(k) || k.startsWith("CODEX_THREAD") || k.startsWith("CODEX_INTERNAL") || k.startsWith("CLAUDECODE")) delete env[k];
   }

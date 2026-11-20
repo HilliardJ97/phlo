@@ -449,6 +449,13 @@ function checkContradictions() {
   }
 }
 
+async function connectChatGPT() {
+  toast("Sign in with ChatGPT in your browser. Phlo connects when you're done.", undefined, 60_000);
+  const r = await host.connectChatGPT().catch(() => ({ ok: false, message: "Sign-in didn't finish. Try again from Your AI." }));
+  settings = await host.getSettings().catch(() => settings);
+  toast(r.message, r.ok ? undefined : { label: "Retry", run: () => void connectChatGPT() }, 6000);
+}
+
 function renderTranscript() {
   const box = $("segments");
   box.innerHTML = "";
@@ -1651,6 +1658,10 @@ window.phlo = {
     routeNoticeShown = true;
     const what = settings.provider === "chatgpt" ? "ChatGPT isn't connected yet" : "Your model isn't connected";
     const via = settings.ai.backup ? `your backup model` : "fast local rules";
-    setTimeout(() => toast(`${what}. Phlo is settling with ${via}.`, { label: "Your AI", run: () => void openSettings() }, 8000), 600);
+    const action =
+      settings.provider === "chatgpt"
+        ? { label: "Connect", run: () => void connectChatGPT() }
+        : { label: "Your AI", run: () => void openSettings() };
+    setTimeout(() => toast(`${what}. Phlo is settling with ${via}.`, action, 12000), 600);
   }
 })();
