@@ -84,6 +84,15 @@ Justin riffed in Partner (screenshots: a "Lumen" riff and a "Coffee table books"
 - **Why it's different:** a real chief of staff handles the back end and presents what matters beautifully (slides, reports).
 - **Next:** talk through the design.
 
+**Real transcripts are on this Mac.** Every utterance is stored in the draft (`transcript`), so build eval cases from what was actually heard, not from screenshots:
+
+```bash
+sqlite3 ~/Library/Application\ Support/phlo/data/phlo.db \
+  "select title, json_extract(doc,'$.transcript') from drafts order by updated_at desc limit 3"
+```
+
+Audio isn't stored yet (planned for Play).
+
 **Eval case:** `evals/goldens.ts` → `riff-lumen`. Distill checks are marked `gap: true`; flip them as features land. Add a `riff-coffee` case from the second screenshot the same way.
 
 ## Commands
