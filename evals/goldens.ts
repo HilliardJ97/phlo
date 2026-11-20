@@ -37,7 +37,13 @@ export type Check =
   /** A table exists whose cells contain these words. */
   | { table: string[]; gap?: boolean }
   /** The draft got a title containing one of these words. */
-  | { title: string[]; gap?: boolean };
+  | { title: string[]; gap?: boolean }
+  /** At most this many lines shorter than 5 words (scraps of a thought). */
+  | { scraps: number; gap?: boolean }
+  /** Distilled: at most this many non-heading lines on the page. */
+  | { linesAtMost: number; gap?: boolean }
+  /** These phrases survive somewhere on the page ("a|b" = either). */
+  | { kept: string[]; gap?: boolean };
 
 export interface Turn {
   say?: string;
@@ -270,6 +276,49 @@ export const SCENARIOS: Scenario[] = [
       {
         say: "move other trends under market, it should all be one section",
         expect: [{ headings: 1, gap: true }, { absent: ["move other trends"] }],
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------------
+  // Case 1 from the first real desktop session (Nov 20): an unstructured riff in
+  // Partner, cut into fragments by pauses, with repeats and restarts. Before:
+  // every fragment became its own line under one "Context" heading. Target: a
+  // distilled page (Problem, Idea, Why it's different) in the speaker's words.
+  {
+    id: "riff-lumen",
+    name: "Unstructured product riff, distilled (Partner)",
+    role: "partner",
+    page: [],
+    turns: [
+      { say: "This morning I had this idea about", expect: [] },
+      { say: "Right now I have my chief of staff in Metamuse. I call him Justy. He's an AI that handles basically all of my to-dos, my calendar, my incoming statuses, my mail, and logging ideas I have on the fly. But to be honest, it's a lot of pulling things out of me.", expect: [] },
+      { say: "It's pushing things towards me, and it's a lot of blasting and keeping up to date. It's hard for me to fully manage because it's not well designed. It's not simplifying this highly complex thing that is my life.", expect: [] },
+      { say: "I'm calling my idea Lumen.", expect: [{ title: ["lumen"] }] },
+      { say: "That", expect: [] },
+      { say: "I want to be able to", expect: [] },
+      { say: "Simplify my life and have an easy way to", expect: [] },
+      { say: "Understand everything and delegate tasks. The whole synopsis behind what I'm building right now is essentially to", expect: [] },
+      { say: "Give me a way to", expect: [] },
+      { say: "Get fully up to speed on everything that's going on in my life. Organize my thoughts on what's going on.", expect: [] },
+      { say: "And delegate tasks at all times.", expect: [] },
+      { say: "Have a living, breathing dashboard.", expect: [] },
+      { say: "Of my life for me to manage at all times.", expect: [] },
+      { say: "And it's different than, I think many people feel this that use", expect: [] },
+      { say: "chief of staff agents is that oftentimes you're managing it all the time", expect: [] },
+      { say: "It's very complicated trying to manage your life through text with a chief of staff. Your chief of staff gives you the most important information, handles everything on the back end, and then tries to present everything to you in a beautiful UI, whether that's slides or reports. That's what I'm trying to do through Lumen.", expect: [] },
+      { say: "That's the high level of what I'm getting at here. I can talk through the design aspects as I think through it.", expect: [] },
+      {
+        say: "Just riffing. That's really what I'm thinking through.",
+        expect: [
+          { title: ["lumen"] },
+          { heading: "problem|today|pain", gap: true },
+          { heading: "idea|lumen|what it does", gap: true },
+          { heading: "different|why", gap: true },
+          { kept: ["justy", "living, breathing dashboard|living breathing dashboard", "delegate", "beautiful"] },
+          { scraps: 0, gap: true },
+          { linesAtMost: 14, gap: true },
+          { absent: ["just riffing", "give me a way to"], gap: true },
+        ],
       },
     ],
   },

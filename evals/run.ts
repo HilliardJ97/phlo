@@ -107,6 +107,18 @@ function grade(e: DocEngine, c: Check, touched: string[], source: string, before
   const gap = !!c.gap;
   const r = (check: string, pass: boolean, note: string): CheckResult => ({ turn, check, pass, gap, note });
 
+  if ("scraps" in c) {
+    const n = blocks.filter((b) => b.kind !== "heading" && b.text.trim() && b.text.trim().split(/\s+/).length < 5).length;
+    return r(`scraps ≤ ${c.scraps}`, n <= c.scraps, `${n} short lines`);
+  }
+  if ("linesAtMost" in c) {
+    const n = blocks.filter((b) => b.kind !== "heading" && b.text.trim()).length;
+    return r(`lines ≤ ${c.linesAtMost}`, n <= c.linesAtMost, `${n} lines`);
+  }
+  if ("kept" in c) {
+    const missing = c.kept.filter((p) => !p.split("|").some((alt) => lc(pageText).includes(lc(alt))));
+    return r(`kept: ${c.kept.join(", ")}`, !missing.length, missing.length ? `missing: ${missing.join(", ")}` : "");
+  }
   if ("lands" in c) {
     const cands = touched.map((id) => e.block(id)).filter((b): b is Block => !!b && !b.wet && b.tab !== "tangent");
     const hit = cands.find((b) => {
