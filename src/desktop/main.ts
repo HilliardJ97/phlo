@@ -6,7 +6,7 @@
  * HostApi methods through one IPC channel. Keys are encrypted with the OS
  * keychain (safeStorage) and never reach the renderer.
  */
-import { app, BrowserWindow, ipcMain, nativeTheme, safeStorage, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, nativeTheme, safeStorage, session, shell, systemPreferences } from "electron";
 import * as path from "node:path";
 import { HOST_METHODS, HostApi, memoryCipher, type Cipher, type HostMethod } from "../host/api";
 import { SupersededError } from "../host/ai/orchestrator";
@@ -56,8 +56,14 @@ app.whenReady().then(async () => {
   const dataDir = process.env.PHLO_DATA_DIR ?? path.join(app.getPath("userData"), "data");
   api = await new HostApi(dataDir, safeStorage.isEncryptionAvailable() ? keychain : memoryCipher).init();
 
-  // Microphone only; deny everything else.
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === "media"));
+  // Microphone only; deny everything else. On macOS the system has to grant it too:
+  // ask once, the first time you talk, so the prompt appears in context.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
+    if (permission !== "media") return cb(false);
+    if (process.platform !== "darwin") return cb(true);
+    if (systemPreferences.getMediaAccessStatus("microphone") === "granted") return cb(true);
+    systemPreferences.askForMediaAccess("microphone").then(cb, () => cb(false));
+  });
 
   ipcMain.handle("phlo", async (_e, method: string, args: unknown[]) => {
     if (!HOST_METHODS.includes(method as HostMethod)) return { ok: false, code: "UNKNOWN_METHOD" };

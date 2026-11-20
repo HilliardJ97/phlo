@@ -861,7 +861,7 @@ async function startTalking(lock = false) {
       },
     });
   } catch (e) {
-    toast(e instanceof Error && e.name === "NotAllowedError" ? "Microphone access was blocked." : "Couldn't start the microphone.");
+    toast(e instanceof Error && e.name === "NotAllowedError" ? "Phlo can’t hear you. Allow it in System Settings › Privacy & Security › Microphone." : "Couldn't start the microphone.");
     stopTalking();
   }
 }

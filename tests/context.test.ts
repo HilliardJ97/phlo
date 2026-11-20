@@ -61,7 +61,7 @@ describe("context packet", () => {
   });
 });
 
-import { contradictions, detectAim, detectInstruction, ledgerMatches } from "../src/engine/memory";
+import { contradictions, detectAim, detectInstruction, ledger, ledgerMatches } from "../src/engine/memory";
 import { DocEngine } from "../src/engine/engine";
 
 describe("memory keeper", () => {
@@ -77,9 +77,14 @@ describe("memory keeper", () => {
     d.blocks.push(blk("x", "paragraph", "The starter plan is sixty dollars"));
     expect(ledgerMatches(d.blocks, "what about the starter plan").map((e) => e.blockId)).toContain("b1_2");
     const c = contradictions(d.blocks).find((c) => c.key === "starter plan");
-    expect(c?.values.map((v) => v.value).sort()).toEqual(["40dollars", "60dollars"]);
+    expect(c?.values.map((v) => v.value).sort()).toEqual(["$40", "$60"]);
     const req = buildRequest(d, ["w1"], { currentHeadingId: "h59", recent: [] });
     expect(assembleContext(req).recall?.[0].id).toBe("b1_2");
+  });
+
+  it("names the thing a price is for", () => {
+    const [e] = ledger([blk("p", "paragraph", "We charge forty dollars a month for the starter plan.")]);
+    expect(e).toMatchObject({ key: "starter plan", value: "$40" });
   });
 
   it("memory ops are undoable", () => {

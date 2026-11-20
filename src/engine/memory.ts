@@ -61,6 +61,13 @@ function stem(w: string): string {
   return w.replace(/(ies)$/, "y").replace(/s$/, "");
 }
 
+function formatValue(raw: string): string {
+  const v = raw.replace(/\s+/g, "");
+  const n = v.replace(/^\$/, "").replace(/dollars?$/, "");
+  if (v.startsWith("$") || /dollars?$/.test(v)) return `$${n}`;
+  return v.replace(/percent$/, "%");
+}
+
 /** Numbers on the page with what they're about. */
 export function ledger(blocks: Block[]): LedgerEntry[] {
   const out: LedgerEntry[] = [];
@@ -80,8 +87,11 @@ export function ledger(blocks: Block[]): LedgerEntry[] {
         .filter((w) => w && !STOP.has(w))
         .slice(0, 2)
         .map(stem);
-      const key = (before.length ? before : after).join(" ");
-      if (key) out.push({ key, value: m[0].replace(/\s+/g, ""), blockId: b.id });
+      // "40 a month for the starter plan": the thing named after "for/on/of" wins over the verb before.
+      const rest = text.slice((m.index ?? 0) + m[0].length);
+      const named = /^\s*(?:a|an|per|each)?\s*(?:month|year|week|day|hour|seat|user)?s?\s*(?:for|on|of)\b/.test(rest);
+      const key = (named && after.length ? after : before.length ? before : after).join(" ");
+      if (key) out.push({ key, value: formatValue(m[0]), blockId: b.id });
     }
   }
   return out;
