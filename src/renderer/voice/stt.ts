@@ -113,7 +113,7 @@ export class BrowserSTT implements Stt {
           h.onError("Microphone access was blocked.");
         } else if (failures > 3) {
           this.active = false;
-          h.onError(e.error === "network" ? "Speech service unreachable. Add a transcription key in Settings." : `Speech stopped (${e.error}).`);
+          h.onError(e.error === "network" ? "Chrome's speech service is unreachable. Check your connection, or use the desktop app." : `Speech stopped (${e.error}).`);
         }
       };
       // The service ends sessions on its own; reconnect while we're still talking.
@@ -196,10 +196,6 @@ class Asr {
 export const asr = new Asr();
 
 const RATE = 16000;
-const WORKLET = `class Tap extends AudioWorkletProcessor {
-  process(inputs) { const ch = inputs[0] && inputs[0][0]; if (ch) this.port.postMessage(ch.slice(0)); return true; }
-}
-registerProcessor("phlo-tap", Tap);`;
 
 /**
  * Desktop path: on-device recognition. Captures 16 kHz audio, cuts utterances
@@ -230,13 +226,20 @@ export class LocalSTT implements Stt {
     const gen = ++this.gen;
     this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
     // Load (or confirm) the model in parallel with the mic: capture starts now, words appear once it's ready.
-    asr.onProgress = (pct) => h.onNotice?.(`Getting voice ready (one time) · ${pct}%`);
+    // Only mention the download if it's actually taking time (a cached model loads in under a second).
+    const shownAfter = performance.now() + 1200;
+    let shown = false;
+    asr.onProgress = (pct) => {
+      if (pct >= 100 || performance.now() < shownAfter) return;
+      shown = true;
+      h.onNotice?.(`Getting voice ready (one time) · ${pct}%`);
+    };
     asr.load().then(
-      () => h.onNotice?.(""),
+      () => shown && h.onNotice?.("Voice is ready."),
       () => h.onError("Couldn't load on-device speech. Check your connection for the one-time download."),
     );
     this.ctx = new AudioContext({ sampleRate: RATE });
-    await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" })));
+    await this.ctx.audioWorklet.addModule("./voice-tap.js");
     if (gen !== this.gen) return;
     const src = this.ctx.createMediaStreamSource(this.stream);
     this.node = new AudioWorkletNode(this.ctx, "phlo-tap");

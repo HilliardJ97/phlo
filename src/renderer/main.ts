@@ -127,7 +127,6 @@ app.innerHTML = `
       <label class="label">Claude key<input type="password" name="claudeKey" autocomplete="off" placeholder="sk-ant-…" /></label>
       <p class="note" id="claude-note"></p>
       </div>
-      <label class="label">Transcription key (OpenAI)<input type="password" name="openaiKey" autocomplete="off" placeholder="sk-…" /></label>
       <p class="note" id="openai-note"></p>
       <label class="label">Theme<select name="theme"><option value="system">System</option><option value="paper">Paper</option><option value="sumi">Sumi</option></select></label>
       <p class="note" id="storage-note"></p>
@@ -408,8 +407,9 @@ function renderMemory() {
 }
 
 /** Aim and standing instructions you just said: remember them, say so once, offer Undo. */
-function rememberFrom(ids: string[]) {
+function rememberFrom(ids: string[]): string[] {
   const ops: Op[] = [];
+  const parkedIds: string[] = [];
   const have = new Set((engine.state.memory ?? []).map((m) => m.text.toLowerCase()));
   for (const id of ids) {
     const b = engine.block(id);
@@ -420,12 +420,19 @@ function rememberFrom(ids: string[]) {
     if (!text || have.has(text.toLowerCase())) continue;
     have.add(text.toLowerCase());
     ops.push({ t: "memory.set", item: memoryItem(aim ? "aim" : "instruction", text, [id]) });
+    // An instruction is for Phlo, not the page: park the line (Undo brings it back). An aim can be content, so it stays.
+    if (rule) {
+      ops.push({ t: "park", id, expectRev: b.rev });
+      parkedIds.push(id);
+    }
   }
-  if (!ops.length) return;
+  if (!ops.length) return [];
   const txId = newId("tx");
-  if (!engine.commit({ id: txId, actor: "phlo", label: "Remember", ops }).ok) return;
+  if (!engine.commit({ id: txId, actor: "phlo", label: "Remember", ops }).ok) return [];
   const said = ops.map((o) => (o.t === "memory.set" ? o.item.text : "")).join(" · ");
-  toast(`Phlo will remember: ${said}`, { label: "Undo", run: () => void engine.undo(txId) }, 6000);
+  toast(`Phlo will remember: ${said}`, { label: "Undo", run: () => (engine.undo(txId), render()) }, 6000);
+  render();
+  return parkedIds;
 }
 
 /** Partner asks once when the same thing gets two different numbers. */
@@ -589,8 +596,14 @@ class Settler {
     if (!ids.length) return;
     this.inflight = true;
     setSettling(true);
-    rememberFrom(ids);
-    const req = buildRequest(engine.snapshot(), ids, { currentHeadingId: currentHeading, recent: recentSettled.slice(0, 5) });
+    const parked = rememberFrom(ids);
+    const rest = ids.filter((id) => !parked.includes(id));
+    if (!rest.length) {
+      this.inflight = false;
+      setSettling(false);
+      return;
+    }
+    const req = buildRequest(engine.snapshot(), rest, { currentHeadingId: currentHeading, recent: recentSettled.slice(0, 5) });
     let res: SettleResponse | null = null;
     try {
       res = await host.settle(req);
@@ -1519,7 +1532,8 @@ async function openSettings() {
         ? settings.claude ? "Connected" : "Add a Claude key below."
         : "Nothing leaves this Mac. Placement is simpler.";
   (f.elements.namedItem("claudeKey") as HTMLInputElement).value = "";
-  (f.elements.namedItem("openaiKey") as HTMLInputElement).value = "";
+  const ok0 = f.elements.namedItem("openaiKey") as HTMLInputElement | null;
+  if (ok0) ok0.value = "";
   $("claude-note").textContent = settings.claude ? `Connected · ${settings.model}` : "Without a key, Phlo settles with fast local rules.";
   $("openai-note").textContent = settings.openai ? "Connected" : host.isDesktop() ? "Needed to talk in the desktop app." : "Optional in Chrome, which has its own speech service.";
   $("storage-note").textContent = settings.secureStorage ? "Keys are encrypted by your system keychain." : "Keys are kept in memory for this session only.";
@@ -1542,7 +1556,7 @@ dialog.addEventListener("close", async () => {
   const ck2 = (f.elements.namedItem("compatKey") as HTMLInputElement).value.trim();
   if (ck2) patch.compatKey = ck2;
   const ck = (f.elements.namedItem("claudeKey") as HTMLInputElement).value.trim();
-  const ok = (f.elements.namedItem("openaiKey") as HTMLInputElement).value.trim();
+  const ok = (f.elements.namedItem("openaiKey") as HTMLInputElement | null)?.value.trim();
   if (ck) patch.claudeKey = ck;
   if (ok) patch.openaiKey = ok;
   settings = await host.setSettings(patch);
