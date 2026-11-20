@@ -2,14 +2,11 @@
  * Speech-to-text, behind one interface.
  *
  *  - BrowserSTT: the browser's speech service (works in Chrome; streaming interim text).
- *  - UtteranceSTT: captures audio on-device, cuts it at pauses with a simple
- *    energy VAD, and sends each utterance to the host to transcribe. This is the
- *    desktop path, where no browser speech service exists. A local Whisper
- *    model can slot in behind the same host call later.
+ *  - LocalSTT: on-device recognition (Moonshine in a worker). The desktop
+ *    path, where no browser speech service exists. Free, no key.
  *
  * Both report an input level (0..1) so the voice dot breathes with your voice.
  */
-import { host } from "../bridge";
 
 export interface SttHandlers {
   onInterim(text: string): void;
@@ -17,10 +14,14 @@ export interface SttHandlers {
   onLevel(level: number): void;
   onError(message: string): void;
   onState?(state: "listening" | "processing"): void;
+  /** Non-fatal status ("Getting voice ready · 40%"). Empty string clears it. */
+  onNotice?(message: string): void;
 }
 
 export interface Stt {
   readonly kind: "browser" | "utterance";
+  /** True when stop() still delivers a final for what you just said. */
+  readonly flushesOnStop?: boolean;
   start(h: SttHandlers): Promise<void>;
   stop(): void;
 }
@@ -137,91 +138,199 @@ export class BrowserSTT implements Stt {
   }
 }
 
-export class UtteranceSTT implements Stt {
+/** One worker for the app's lifetime; the model loads once. */
+class Asr {
+  private worker: Worker | null = null;
+  private seq = 0;
+  private pending = new Map<number, { resolve: (t: string) => void; reject: (e: Error) => void }>();
+  private ready: Promise<void> | null = null;
+  onProgress: ((pct: number) => void) | null = null;
+
+  private boot(): Worker {
+    if (this.worker) return this.worker;
+    const w = new Worker(new URL("./asr.worker.ts", import.meta.url), { type: "module" });
+    w.onmessage = (e: MessageEvent<{ type: string; id?: number; text?: string; pct?: number; message?: string }>) => {
+      const m = e.data;
+      if (m.type === "progress") this.onProgress?.(m.pct ?? 0);
+      else if (m.type === "result" && m.id !== undefined) {
+        this.pending.get(m.id)?.resolve(m.text ?? "");
+        this.pending.delete(m.id);
+      } else if (m.type === "error") {
+        const err = new Error(m.message ?? "Speech model failed");
+        if (m.id !== undefined) {
+          this.pending.get(m.id)?.reject(err);
+          this.pending.delete(m.id);
+        } else this.failReady?.(err);
+      } else if (m.type === "ready") this.okReady?.();
+    };
+    this.worker = w;
+    return w;
+  }
+
+  private okReady: (() => void) | null = null;
+  private failReady: ((e: Error) => void) | null = null;
+
+  load(): Promise<void> {
+    if (!this.ready) {
+      this.ready = new Promise<void>((res, rej) => {
+        this.okReady = res;
+        this.failReady = (e) => {
+          this.ready = null;
+          rej(e);
+        };
+      });
+      this.boot().postMessage({ type: "load" });
+    }
+    return this.ready;
+  }
+
+  transcribe(audio: Float32Array): Promise<string> {
+    const id = ++this.seq;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject });
+      this.boot().postMessage({ type: "run", id, audio }, [audio.buffer]);
+    });
+  }
+}
+
+export const asr = new Asr();
+
+const RATE = 16000;
+const WORKLET = `class Tap extends AudioWorkletProcessor {
+  process(inputs) { const ch = inputs[0] && inputs[0][0]; if (ch) this.port.postMessage(ch.slice(0)); return true; }
+}
+registerProcessor("phlo-tap", Tap);`;
+
+/**
+ * Desktop path: on-device recognition. Captures 16 kHz audio, cuts utterances
+ * at pauses (energy VAD with pre-roll so first syllables aren't clipped),
+ * previews words while you talk, and transcribes the whole utterance when you
+ * pause or let go.
+ */
+export class LocalSTT implements Stt {
   readonly kind = "utterance" as const;
+  readonly flushesOnStop = true;
   private stream: MediaStream | null = null;
-  private meter: LevelMeter | null = null;
-  private recorder: MediaRecorder | null = null;
-  private chunks: Blob[] = [];
-  private speaking = false;
-  private silentSince = 0;
-  private startedAt = 0;
+  private ctx: AudioContext | null = null;
+  private node: AudioWorkletNode | null = null;
   private h: SttHandlers | null = null;
+  private pre: Float32Array[] = [];
+  private cur: Float32Array[] = [];
+  private speaking = false;
+  private silentMs = 0;
+  private spokenMs = 0;
+  private sinceInterim = 0;
+  private interimBusy = false;
   private queue: Promise<void> = Promise.resolve();
+  private level = 0;
+  private gen = 0;
 
   async start(h: SttHandlers) {
     this.h = h;
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
-    this.meter = new LevelMeter(this.stream);
-    const SPEECH = 0.018;
-    const SILENCE_MS = 750;
-    this.meter.start(h.onLevel, (rms) => {
-      const now = performance.now();
+    const gen = ++this.gen;
+    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } });
+    // Load (or confirm) the model in parallel with the mic: capture starts now, words appear once it's ready.
+    asr.onProgress = (pct) => h.onNotice?.(`Getting voice ready (one time) · ${pct}%`);
+    asr.load().then(
+      () => h.onNotice?.(""),
+      () => h.onError("Couldn't load on-device speech. Check your connection for the one-time download."),
+    );
+    this.ctx = new AudioContext({ sampleRate: RATE });
+    await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" })));
+    if (gen !== this.gen) return;
+    const src = this.ctx.createMediaStreamSource(this.stream);
+    this.node = new AudioWorkletNode(this.ctx, "phlo-tap");
+    this.node.port.onmessage = (e: MessageEvent<Float32Array>) => this.frame(e.data);
+    src.connect(this.node);
+  }
+
+  private frame(buf: Float32Array) {
+    let sum = 0;
+    for (const v of buf) sum += v * v;
+    const rms = Math.sqrt(sum / buf.length);
+    this.level = this.level * 0.85 + Math.min(1, rms * 8) * 0.15;
+    this.h?.onLevel(this.level);
+    const ms = (buf.length / RATE) * 1000;
+    const SPEECH = 0.012;
+    if (!this.speaking) {
+      this.pre.push(buf);
+      // Keep ~300 ms of pre-roll.
+      while (this.pre.length * ms > 300) this.pre.shift();
       if (rms > SPEECH) {
-        this.silentSince = 0;
-        if (!this.speaking) this.begin();
-      } else if (this.speaking) {
-        if (!this.silentSince) this.silentSince = now;
-        if (now - this.silentSince > SILENCE_MS || now - this.startedAt > 20_000) this.end();
+        this.speaking = true;
+        this.cur = [...this.pre];
+        this.pre = [];
+        this.silentMs = 0;
+        this.spokenMs = 0;
+        this.sinceInterim = 0;
       }
-    });
-  }
-
-  private begin() {
-    if (!this.stream) return;
-    this.speaking = true;
-    this.startedAt = performance.now();
-    this.chunks = [];
-    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus" : "";
-    this.recorder = new MediaRecorder(this.stream, mime ? { mimeType: mime } : undefined);
-    this.recorder.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
-    this.recorder.onstop = () => this.send(new Blob(this.chunks, { type: this.recorder?.mimeType || "audio/webm" }));
-    this.recorder.start(250);
-    this.h?.onInterim("…");
-  }
-
-  private end() {
-    this.speaking = false;
-    this.silentSince = 0;
-    if (this.recorder?.state === "recording") this.recorder.stop();
-  }
-
-  private send(blob: Blob) {
-    if (blob.size < 2000) {
-      this.h?.onInterim("");
       return;
     }
-    // Keep utterances in spoken order even if transcription calls overlap.
+    this.cur.push(buf);
+    this.spokenMs += ms;
+    this.sinceInterim += ms;
+    this.silentMs = rms > SPEECH ? 0 : this.silentMs + ms;
+    if (this.silentMs > 700 || this.spokenMs > 25_000) this.cut();
+    else if (this.sinceInterim > 900) this.preview();
+  }
+
+  private audio(): Float32Array {
+    const n = this.cur.reduce((k, b) => k + b.length, 0);
+    const out = new Float32Array(n);
+    let o = 0;
+    for (const b of this.cur) {
+      out.set(b, o);
+      o += b.length;
+    }
+    return out;
+  }
+
+  /** Words while you're still talking (wet preview); replaced by the final pass. */
+  private preview() {
+    this.sinceInterim = 0;
+    if (this.interimBusy) return;
+    this.interimBusy = true;
+    const gen = this.gen;
+    asr
+      .transcribe(this.audio())
+      .then((t) => {
+        if (gen === this.gen && this.speaking && t) this.h?.onInterim(t);
+      })
+      .catch(() => undefined)
+      .finally(() => (this.interimBusy = false));
+  }
+
+  private cut() {
+    const audio = this.audio();
+    this.speaking = false;
+    this.cur = [];
+    this.pre = [];
+    if (audio.length < RATE * 0.3) return;
+    const h = this.h;
+    // Finals keep spoken order even when calls overlap.
     this.queue = this.queue.then(async () => {
-      this.h?.onState?.("processing");
+      h?.onState?.("processing");
       try {
-        const b64 = await blobToBase64(blob);
-        const { text } = await host.transcribe(b64, blob.type);
-        this.h?.onInterim("");
-        if (text) this.h?.onFinal(text);
-      } catch (e) {
-        this.h?.onInterim("");
-        const msg = e instanceof Error ? e.message : String(e);
-        this.h?.onError(msg.includes("NO_TRANSCRIPTION_KEY") ? "Add a transcription key in Settings to talk." : "Couldn't transcribe that. Still listening.");
+        const text = await asr.transcribe(audio);
+        h?.onInterim("");
+        if (text && !/^[\s.…]*$/.test(text)) h?.onFinal(text);
+      } catch {
+        h?.onInterim("");
+        h?.onNotice?.("Couldn't make out that last bit. Still listening.");
       } finally {
-        this.h?.onState?.("listening");
+        h?.onState?.("listening");
       }
     });
   }
 
   stop() {
-    if (this.speaking) this.end();
-    this.meter?.stop();
+    this.gen++;
+    if (this.speaking) this.cut();
+    this.node?.disconnect();
+    this.ctx?.close().catch(() => undefined);
     this.stream?.getTracks().forEach((t) => t.stop());
+    this.node = null;
+    this.ctx = null;
     this.stream = null;
   }
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(",")[1] ?? "");
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
 }

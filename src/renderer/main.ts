@@ -11,7 +11,7 @@ import { host, HostError, type HostSettings } from "./bridge";
 import { Editor, embedSrc, inPage } from "./editor/view";
 import { chartSummary, FORM_OPTIONS, suggestForm, turnIntoOps, type FormOption, type MediaAction } from "../engine/forms";
 import { parseVoiceIntent } from "../engine/intents";
-import { BrowserSTT, browserSttAvailable, UtteranceSTT, type Stt } from "./voice/stt";
+import { BrowserSTT, browserSttAvailable, LocalSTT, type Stt } from "./voice/stt";
 
 // ============================================================================ helpers
 
@@ -685,10 +685,10 @@ let interim = "";
 let lastSpeechAt = 0;
 let stallTimer = 0;
 
-function chooseStt(): Stt | null {
-  if (host.isDesktop()) return settings?.openai ? new UtteranceSTT() : browserSttAvailable() ? new BrowserSTT() : null;
-  if (browserSttAvailable()) return new BrowserSTT();
-  return settings?.openai ? new UtteranceSTT() : null;
+/** Desktop: on-device speech (free, no key). Browser: Chrome's speech service, else on-device. */
+function chooseStt(): Stt {
+  if (!host.isDesktop() && browserSttAvailable()) return new BrowserSTT();
+  return new LocalSTT();
 }
 
 /** Spoken words go to the end of the section you're in, else the end of the page (before Next). */
@@ -810,10 +810,6 @@ async function startTalking(lock = false) {
   }
   if (!settings) settings = await host.getSettings().catch(() => null);
   stt = chooseStt();
-  if (!stt) {
-    toast("Add a transcription key in Your AI to talk.", { label: "Open", run: () => void openSettings() }, 6000);
-    return;
-  }
   talking = true;
   void host.setTalking(true).catch(() => undefined);
   locked = lock;
@@ -843,6 +839,9 @@ async function startTalking(lock = false) {
         addSpeech(t);
       },
       onLevel: (l) => voiceBtn.style.setProperty("--level", String(1 + Math.min(0.25, l * 0.6))),
+      onNotice: (m) => {
+        if (m) toast(m, undefined, 4000);
+      },
       onError: (m) => {
         toast(m, m.includes("Your AI") || m.includes("Settings") ? { label: "Open", run: () => void openSettings() } : undefined, 6000);
         stopTalking();
@@ -859,9 +858,11 @@ function stopTalking() {
   talking = false;
   void host.setTalking(false).catch(() => undefined);
   locked = false;
+  const flushes = stt?.flushesOnStop;
   stt?.stop();
   stt = null;
-  if (interim) addSpeech(interim);
+  // On-device speech delivers its own final for the last words; don't add the preview twice.
+  if (interim && !flushes) addSpeech(interim);
   interim = "";
   liveEl.textContent = "";
   clearTimeout(stallTimer);
