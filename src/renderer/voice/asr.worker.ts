@@ -28,11 +28,12 @@ async function webgpu(): Promise<boolean> {
 
 function load(): Promise<AutomaticSpeechRecognitionPipeline> {
   asr ??= (async () => {
-    const gpu = await webgpu();
+    // CPU (8-bit, ~60 MB) is the verified path everywhere. WebGPU (faster on Apple
+    // Silicon, ~150 MB) is opt-in until it's been tried on real Macs.
+    const gpu = (self as unknown as { PHLO_WEBGPU?: boolean }).PHLO_WEBGPU === true && (await webgpu());
     const device = gpu ? "webgpu" : "wasm";
     const p = (await pipeline("automatic-speech-recognition", MODEL, {
       device,
-      // GPU: full-precision encoder, 4-bit decoder (Moonshine's recommended split). CPU: 8-bit, ~60 MB total.
       dtype: gpu ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8",
       progress_callback: (e: { status: string; file?: string; loaded?: number; total?: number }) => {
         if (e.status !== "progress" || !e.file || !e.total) return;
